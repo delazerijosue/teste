@@ -175,7 +175,7 @@ export const useStore = create<AppState>((set, get) => ({
         const variant = resolveTaglineVariant(resized.overrides)
         const etiqueta = resolveEtiquetaAsset(resized)
         const tagline = resolveTaglineAsset(resized, variant)
-        const layout = computeLayout(widthPx, heightPx, resized.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
+        const layout = computeLayout(widthPx, heightPx, resized.overrides, etiqueta.aspectRatio, tagline.aspectRatio, etiqueta.topBleedRatio)
         const clamped = clampOffset(layout.photoArea, resized.photo.naturalWidth, resized.photo.naturalHeight, resized.photo.transform)
         return { ...resized, photo: { ...resized.photo, transform: clamped } }
       }),

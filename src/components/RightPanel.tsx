@@ -18,7 +18,14 @@ export function RightPanel({ frameId }: { frameId: string }) {
 
   const layout = useMemo(() => {
     if (!frame || !etiquetaAsset || !taglineAsset) return null
-    return computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio)
+    return computeLayout(
+      frame.widthPx,
+      frame.heightPx,
+      frame.overrides,
+      etiquetaAsset.aspectRatio,
+      taglineAsset.aspectRatio,
+      etiquetaAsset.topBleedRatio,
+    )
   }, [frame, etiquetaAsset, taglineAsset])
 
   if (!frame || !layout || !etiquetaAsset || !taglineAsset) return null

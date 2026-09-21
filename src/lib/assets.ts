@@ -46,6 +46,12 @@ function contentAspectRatio(naturalWidth: number, naturalHeight: number, inset: 
   return w / h
 }
 
+/** How far the rendered image bleeds above its content box, relative to the content box's own height. */
+function topBleedRatio(naturalHeight: number, inset: EtiquetaInset): number {
+  const contentHeight = naturalHeight - inset.top - inset.bottom
+  return contentHeight > 0 ? inset.top / contentHeight : 0
+}
+
 export const TAGLINES: Record<TaglineVariant, { src: string; naturalWidth: number; naturalHeight: number; aspectRatio: number }> = {
   // UMA-LINHA: "A gente veste o Brasil. Desde 1880." (texto, fonte Hering Sans)
   a: { src: assetUrl('assets/tagline-a.svg'), naturalWidth: 734.53, naturalHeight: 48.51, aspectRatio: 734.53 / 48.51 },
@@ -78,6 +84,8 @@ export interface ResolvedEtiqueta {
   inset: EtiquetaInset
   /** Aspect ratio já considerando o inset — é o que computeLayout usa. */
   aspectRatio: number
+  /** Sangramento do topo (linha de costura/sombra) relativo à altura da caixa de conteúdo. */
+  topBleedRatio: number
   isCustom: boolean
 }
 
@@ -96,6 +104,7 @@ export function resolveEtiquetaAsset(frame: Frame): ResolvedEtiqueta {
       naturalHeight,
       inset: ZERO_INSET,
       aspectRatio: naturalWidth / naturalHeight,
+      topBleedRatio: 0,
       isCustom: true,
     }
   }
@@ -106,6 +115,7 @@ export function resolveEtiquetaAsset(frame: Frame): ResolvedEtiqueta {
     naturalHeight: ETIQUETA_FRONT.naturalHeight,
     inset: ETIQUETA_INSET,
     aspectRatio: contentAspectRatio(ETIQUETA_FRONT.naturalWidth, ETIQUETA_FRONT.naturalHeight, ETIQUETA_INSET),
+    topBleedRatio: topBleedRatio(ETIQUETA_FRONT.naturalHeight, ETIQUETA_INSET),
     isCustom: false,
   }
 }

@@ -60,8 +60,12 @@ export function getOrientation(widthPx: number, heightPx: number): Orientation {
 }
 
 /**
- * @param etiquetaAspectRatio width / height of the fixed etiqueta PNG asset
+ * @param etiquetaAspectRatio width / height of the etiqueta asset's content box (after inset)
  * @param taglineAspectRatio width / height of the currently selected tagline SVG variant
+ * @param etiquetaTopBleedRatio how far (relative to the etiqueta's content-box height) the
+ *   rendered etiqueta image extends above its content box — e.g. a shadow/stitching bleed.
+ *   0 for assets with no inset (custom uploads). Used so the default position lands the
+ *   image's real top edge, not the content box, flush against the margin/photo divider.
  */
 export function computeLayout(
   widthPx: number,
@@ -69,6 +73,7 @@ export function computeLayout(
   overrides: FrameOverrides,
   etiquetaAspectRatio: number,
   taglineAspectRatio: number,
+  etiquetaTopBleedRatio = 0,
 ): LayoutResult {
   const orientation = getOrientation(widthPx, heightPx)
   const maiorLado = Math.max(widthPx, heightPx)
@@ -109,9 +114,13 @@ export function computeLayout(
       height: etiquetaHeight,
     }
   } else {
+    // A posição Y padrão encosta o topo real da imagem (não a caixa de
+    // conteúdo) na divisa entre a margem e o espaço da foto — por isso soma
+    // o "sangramento" (linha de costura/sombra) em vez do gap de 7%.
+    const defaultY = margin.top + etiquetaHeight * etiquetaTopBleedRatio
     etiquetaRect = {
       x: overrides.etiquetaPos?.x ?? margin.left + gap,
-      y: overrides.etiquetaPos?.y ?? margin.top + gap,
+      y: overrides.etiquetaPos?.y ?? defaultY,
       width: etiquetaWidth,
       height: etiquetaHeight,
     }
