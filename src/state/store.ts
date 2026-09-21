@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { nanoid } from 'nanoid'
 import { computeLayout, defaultOverrides, resolveTaglineVariant, type FrameOverrides } from '../lib/layout'
 import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
-import { clampOffset } from '../lib/photo'
+import { preservePhotoFraction } from '../lib/photo'
 import { toPx, type Unit } from '../lib/units'
 import type { CustomAsset } from '../lib/customAssets'
 import type { Frame, PhotoState } from '../types'
@@ -172,12 +172,19 @@ export const useStore = create<AppState>((set, get) => ({
 
         if (!resized.photo) return resized
 
-        const variant = resolveTaglineVariant(resized.overrides)
-        const etiqueta = resolveEtiquetaAsset(resized)
-        const tagline = resolveTaglineAsset(resized, variant)
-        const layout = computeLayout(widthPx, heightPx, resized.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
-        const clamped = clampOffset(layout.photoArea, resized.photo.naturalWidth, resized.photo.naturalHeight, resized.photo.transform)
-        return { ...resized, photo: { ...resized.photo, transform: clamped } }
+        const variant = resolveTaglineVariant(f.overrides)
+        const etiqueta = resolveEtiquetaAsset(f)
+        const tagline = resolveTaglineAsset(f, variant)
+        const oldPhotoArea = computeLayout(f.widthPx, f.heightPx, f.overrides, etiqueta.aspectRatio, tagline.aspectRatio).photoArea
+        const newPhotoArea = computeLayout(widthPx, heightPx, resized.overrides, etiqueta.aspectRatio, tagline.aspectRatio).photoArea
+        const transform = preservePhotoFraction(
+          oldPhotoArea,
+          newPhotoArea,
+          resized.photo.naturalWidth,
+          resized.photo.naturalHeight,
+          resized.photo.transform,
+        )
+        return { ...resized, photo: { ...resized.photo, transform } }
       }),
     }))
   },

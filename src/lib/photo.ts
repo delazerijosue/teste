@@ -63,3 +63,61 @@ export function centeredTransform(
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
+
+export const MAX_PHOTO_ZOOM = 3
+
+export interface LoadedPhoto {
+  src: string
+  naturalWidth: number
+  naturalHeight: number
+  transform: PhotoTransform
+}
+
+/**
+ * Re-derives a photo transform for a new photo area, preserving the same
+ * relative pan position (0..1 fraction of the available slack on each
+ * axis) and zoom level instead of re-clamping the raw pixel offsets —
+ * so a resized (or duplicated-then-resized) frame keeps a similar crop
+ * instead of snapping to a corner.
+ */
+export function preservePhotoFraction(
+  oldArea: Rect,
+  newArea: Rect,
+  naturalWidth: number,
+  naturalHeight: number,
+  transform: PhotoTransform,
+): PhotoTransform {
+  const oldBase = coverScale(oldArea, naturalWidth, naturalHeight)
+  const oldSlackX = oldArea.width - naturalWidth * oldBase * transform.scale
+  const oldSlackY = oldArea.height - naturalHeight * oldBase * transform.scale
+  const fracX = oldSlackX !== 0 ? transform.offsetX / oldSlackX : 0.5
+  const fracY = oldSlackY !== 0 ? transform.offsetY / oldSlackY : 0.5
+
+  const newBase = coverScale(newArea, naturalWidth, naturalHeight)
+  const newSlackX = newArea.width - naturalWidth * newBase * transform.scale
+  const newSlackY = newArea.height - naturalHeight * newBase * transform.scale
+
+  return clampOffset(newArea, naturalWidth, naturalHeight, {
+    scale: transform.scale,
+    offsetX: newSlackX * fracX,
+    offsetY: newSlackY * fracY,
+  })
+}
+
+/** Loads an image file and centers it (cover-fit) within `area`. */
+export function loadPhotoFile(file: File, area: Rect): Promise<LoadedPhoto> {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      resolve({
+        src,
+        naturalWidth: img.naturalWidth,
+        naturalHeight: img.naturalHeight,
+        transform: centeredTransform(area, img.naturalWidth, img.naturalHeight, 1),
+      })
+    }
+    img.onerror = reject
+    img.src = src
+  })
+}

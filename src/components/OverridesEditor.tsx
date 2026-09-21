@@ -3,6 +3,7 @@ import { useStore } from '../state/store'
 import { computeLayout, resolveTaglineVariant, type TaglineVariant } from '../lib/layout'
 import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
 import { loadCustomAsset, isAcceptedAssetFile } from '../lib/customAssets'
+import { clampOffset, loadPhotoFile, MAX_PHOTO_ZOOM } from '../lib/photo'
 import { fromPx, toPx } from '../lib/units'
 import type { Frame } from '../types'
 import './OverridesEditor.css'
@@ -13,9 +14,13 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
   const resizeFrame = useStore((s) => s.resizeFrame)
   const setCustomEtiqueta = useStore((s) => s.setCustomEtiqueta)
   const setCustomTagline = useStore((s) => s.setCustomTagline)
+  const setPhoto = useStore((s) => s.setPhoto)
+  const updatePhotoTransform = useStore((s) => s.updatePhotoTransform)
+  const snapshot = useStore((s) => s.snapshot)
 
   const etiquetaInputRef = useRef<HTMLInputElement>(null)
   const taglineInputRef = useRef<HTMLInputElement>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
 
   const variant = resolveTaglineVariant(frame.overrides)
   const etiquetaAsset = resolveEtiquetaAsset(frame)
@@ -63,8 +68,91 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
     setCustomTagline(frame.id, asset)
   }
 
+  const onPhotoFile = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !/^image\/(png|jpe?g)$/.test(file.type)) return
+    snapshot()
+    const photo = await loadPhotoFile(file, layout.photoArea)
+    setPhoto(frame.id, photo)
+  }
+
+  const onPhotoZoom = (value: number) => {
+    if (!frame.photo) return
+    const clamped = clampOffset(layout.photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, {
+      ...frame.photo.transform,
+      scale: value,
+    })
+    updatePhotoTransform(frame.id, clamped)
+  }
+
+  const onPhotoOffset = (axis: 'offsetX' | 'offsetY', displayValue: number) => {
+    if (!frame.photo) return
+    const clamped = clampOffset(layout.photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, {
+      ...frame.photo.transform,
+      [axis]: toPx(displayValue, unit),
+    })
+    updatePhotoTransform(frame.id, clamped)
+  }
+
   return (
     <div className="overrides-editor">
+      <fieldset>
+        <legend>Foto</legend>
+        <p className="asset-status">{frame.photo ? 'Foto enviada' : 'Nenhuma foto enviada'}</p>
+        <div className="asset-actions">
+          <button type="button" className="secondary" onClick={() => photoInputRef.current?.click()}>
+            {frame.photo ? 'Trocar foto' : 'Enviar foto'}
+          </button>
+        </div>
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/png,image/jpeg"
+          className="hidden-input"
+          onChange={onPhotoFile}
+        />
+
+        {frame.photo && (
+          <>
+            <div>
+              <label>Zoom</label>
+              <input
+                type="range"
+                min={1}
+                max={MAX_PHOTO_ZOOM}
+                step={0.01}
+                value={frame.photo.transform.scale}
+                onFocus={() => snapshot()}
+                onChange={(e) => onPhotoZoom(Number(e.target.value))}
+              />
+            </div>
+            <div className="field-row">
+              <div>
+                <label>Posição X</label>
+                <input
+                  type="number"
+                  step={step}
+                  value={disp(frame.photo.transform.offsetX)}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => onPhotoOffset('offsetX', Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label>Posição Y</label>
+                <input
+                  type="number"
+                  step={step}
+                  value={disp(frame.photo.transform.offsetY)}
+                  onFocus={() => snapshot()}
+                  onChange={(e) => onPhotoOffset('offsetY', Number(e.target.value))}
+                />
+              </div>
+            </div>
+          </>
+        )}
+      </fieldset>
+
       <fieldset>
         <legend>Tamanho do frame</legend>
         <div className="field-row">
