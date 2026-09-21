@@ -1,0 +1,59 @@
+.photo-layer {
+  position: absolute;
+  overflow: hidden;
+  background: var(--color-photo-placeholder);
+  touch-action: none;
+}
+
+.photo-layer__img {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+}
+
+.photo-layer__placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: var(--color-photo-placeholder);
+  color: #4a5459;
+  border-radius: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.photo-layer__plus {
+  font-size: 28px;
+  line-height: 1;
+  font-weight: 300;
+}
+
+.photo-layer__input {
+  display: none;
+}
+
+.photo-layer__controls {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(13, 21, 26, 0.75);
+  border-radius: 6px;
+  padding: 6px 8px;
+  backdrop-filter: blur(2px);
+}
+
+.photo-layer__replace {
+  font-size: 11px;
+  padding: 5px 8px;
+  white-space: nowrap;
+}

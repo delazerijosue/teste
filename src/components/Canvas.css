@@ -1,0 +1,48 @@
+.canvas-viewport {
+  position: relative;
+  flex: 1;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--color-canvas-bg);
+  background-image: radial-gradient(circle, #24343d 1px, transparent 1.4px);
+  cursor: grab;
+  touch-action: none;
+}
+
+.canvas-viewport:active {
+  cursor: grabbing;
+}
+
+.canvas-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.canvas-empty-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #5a6a72;
+  font-size: 14px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.zoom-controls {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 4px;
+  background: var(--color-panel-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.zoom-controls button {
+  min-width: 40px;
+}

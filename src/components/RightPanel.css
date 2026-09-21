@@ -1,0 +1,45 @@
+.right-panel {
+  width: 280px;
+  flex-shrink: 0;
+  height: 100vh;
+  background: var(--color-panel-bg);
+  border-left: 1px solid var(--color-border);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.right-panel h2 {
+  font-size: 15px;
+  margin: 0 0 16px;
+}
+
+.details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 20px;
+}
+
+.details-list dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8fa2ab;
+}
+
+.details-list dd {
+  margin: 2px 0 0;
+  font-size: 13px;
+}
+
+.export-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-error {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-danger);
+}

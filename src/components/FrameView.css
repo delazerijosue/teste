@@ -1,0 +1,71 @@
+.frame {
+  position: absolute;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.35);
+  cursor: default;
+  user-select: none;
+}
+
+.frame--selected {
+  box-shadow: 0 0 0 2px var(--color-accent), 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.frame__etiqueta,
+.frame__tagline {
+  position: absolute;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.frame__label {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #8fa2ab;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.frame--selected .frame__label {
+  color: var(--color-text);
+}
+
+.debug-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.debug-rect {
+  position: absolute;
+  border: 1px dashed;
+}
+
+.debug-rect--margin {
+  border-color: #ff8a00;
+}
+
+.debug-rect--etiqueta {
+  border-color: #00c2a8;
+}
+
+.debug-rect--tagline {
+  border-color: #ff4fd8;
+}
+
+.debug-info {
+  position: absolute;
+  top: 8px;
+  right: -8px;
+  transform: translateX(100%);
+  background: rgba(19, 31, 38, 0.95);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+  color: var(--color-text);
+}
