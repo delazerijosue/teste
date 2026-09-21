@@ -21,16 +21,8 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
   const etiquetaAsset = resolveEtiquetaAsset(frame)
   const taglineAsset = resolveTaglineAsset(frame, variant)
   const layout = useMemo(
-    () =>
-      computeLayout(
-        frame.widthPx,
-        frame.heightPx,
-        frame.overrides,
-        etiquetaAsset.aspectRatio,
-        taglineAsset.aspectRatio,
-        etiquetaAsset.topBleedRatio,
-      ),
-    [frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio, etiquetaAsset.topBleedRatio],
+    () => computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio),
+    [frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio],
   )
 
   const unit = frame.unit

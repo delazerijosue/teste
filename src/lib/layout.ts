@@ -62,10 +62,6 @@ export function getOrientation(widthPx: number, heightPx: number): Orientation {
 /**
  * @param etiquetaAspectRatio width / height of the etiqueta asset's content box (after inset)
  * @param taglineAspectRatio width / height of the currently selected tagline SVG variant
- * @param etiquetaTopBleedRatio how far (relative to the etiqueta's content-box height) the
- *   rendered etiqueta image extends above its content box — e.g. a shadow/stitching bleed.
- *   0 for assets with no inset (custom uploads). Used so the default position lands the
- *   image's real top edge, not the content box, flush against the margin/photo divider.
  */
 export function computeLayout(
   widthPx: number,
@@ -73,7 +69,6 @@ export function computeLayout(
   overrides: FrameOverrides,
   etiquetaAspectRatio: number,
   taglineAspectRatio: number,
-  etiquetaTopBleedRatio = 0,
 ): LayoutResult {
   const orientation = getOrientation(widthPx, heightPx)
   const maiorLado = Math.max(widthPx, heightPx)
@@ -103,9 +98,10 @@ export function computeLayout(
 
   let etiquetaRect: Rect
   if (isWide) {
-    // Etiqueta move para a parte inferior, centralizada horizontalmente,
-    // ocupando a parte superior da margem inferior (agora 2/7 da altura).
-    const defaultY = bandTop + marginBottom * 0.12
+    // Etiqueta move para a parte inferior, centralizada horizontalmente, com
+    // a base da caixa de conteúdo colada exatamente onde a foto termina (o
+    // arquivo renderizado, com sua folga/sombra, sangra para baixo a partir daí).
+    const defaultY = bandTop - etiquetaHeight
     const defaultX = (widthPx - etiquetaWidth) / 2
     etiquetaRect = {
       x: overrides.etiquetaPos?.x ?? defaultX,
@@ -114,13 +110,12 @@ export function computeLayout(
       height: etiquetaHeight,
     }
   } else {
-    // A posição Y padrão encosta o topo real da imagem (não a caixa de
-    // conteúdo) na divisa entre a margem e o espaço da foto — por isso soma
-    // o "sangramento" (linha de costura/sombra) em vez do gap de 7%.
-    const defaultY = margin.top + etiquetaHeight * etiquetaTopBleedRatio
+    // A caixa de conteúdo (etiqueta descontada a folga/sombra) fica colada
+    // exatamente onde a foto começa; o arquivo renderizado sangra para cima
+    // a partir daí.
     etiquetaRect = {
       x: overrides.etiquetaPos?.x ?? margin.left + gap,
-      y: overrides.etiquetaPos?.y ?? defaultY,
+      y: overrides.etiquetaPos?.y ?? margin.top,
       width: etiquetaWidth,
       height: etiquetaHeight,
     }

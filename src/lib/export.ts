@@ -71,7 +71,7 @@ function frameLayout(frame: Frame) {
   const variant = resolveTaglineVariant(frame.overrides)
   const etiqueta = resolveEtiquetaAsset(frame)
   const tagline = resolveTaglineAsset(frame, variant)
-  const layout = computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiqueta.aspectRatio, tagline.aspectRatio, etiqueta.topBleedRatio)
+  const layout = computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
   return { layout, etiqueta, tagline }
 }
 
