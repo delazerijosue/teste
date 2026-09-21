@@ -36,7 +36,7 @@ export const ETIQUETA_SHADOW = {
   naturalHeight: 848,
 }
 
-export const ETIQUETA_INSET: EtiquetaInset = { top: 10, right: 88, bottom: 85, left: 88 }
+export const ETIQUETA_INSET: EtiquetaInset = { top: 70, right: 88, bottom: 85, left: 88 }
 
 const ZERO_INSET: EtiquetaInset = { top: 0, right: 0, bottom: 0, left: 0 }
 
