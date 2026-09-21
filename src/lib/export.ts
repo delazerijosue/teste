@@ -13,6 +13,7 @@ import { computeLayout, resolveTaglineVariant } from './layout'
 import { resolveEtiquetaAsset, resolveTaglineAsset, getEtiquetaRenderRect, type EtiquetaLayer } from './assets'
 import { coverScale } from './photo'
 import { pxToMm, pxToExportPixels } from './units'
+import { assetUrl } from './url'
 import type { Frame } from '../types'
 import type { Rect } from './layout'
 
@@ -28,7 +29,7 @@ let heringFontBase64: Promise<string> | null = null
 
 function loadHeringFontBase64(): Promise<string> {
   if (!heringFontBase64) {
-    heringFontBase64 = fetch('/assets/fonts/HeringSans-Bold.ttf')
+    heringFontBase64 = fetch(assetUrl('assets/fonts/HeringSans-Bold.ttf'))
       .then((r) => r.arrayBuffer())
       .then((buf) => {
         const bytes = new Uint8Array(buf)

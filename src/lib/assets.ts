@@ -1,6 +1,7 @@
 import type { TaglineVariant, Rect } from './layout'
 import type { Frame } from '../types'
 import type { AssetKind } from './customAssets'
+import { assetUrl } from './url'
 
 /**
  * Fixed system assets (Seção 3): etiqueta (frente + sombra, PNG) and the
@@ -24,13 +25,13 @@ export interface EtiquetaInset {
  * desenhado no tamanho real, ultrapassando a caixa calculada.
  */
 export const ETIQUETA_FRONT = {
-  src: '/assets/etiqueta-frente.png',
+  src: assetUrl('assets/etiqueta-frente.png'),
   naturalWidth: 754,
   naturalHeight: 848,
 }
 
 export const ETIQUETA_SHADOW = {
-  src: '/assets/etiqueta-sombra.png',
+  src: assetUrl('assets/etiqueta-sombra.png'),
   naturalWidth: 754,
   naturalHeight: 848,
 }
@@ -47,9 +48,9 @@ function contentAspectRatio(naturalWidth: number, naturalHeight: number, inset: 
 
 export const TAGLINES: Record<TaglineVariant, { src: string; naturalWidth: number; naturalHeight: number; aspectRatio: number }> = {
   // UMA-LINHA: "A gente veste o Brasil. Desde 1880." (texto, fonte Hering Sans)
-  a: { src: '/assets/tagline-a.svg', naturalWidth: 734.53, naturalHeight: 48.51, aspectRatio: 734.53 / 48.51 },
+  a: { src: assetUrl('assets/tagline-a.svg'), naturalWidth: 734.53, naturalHeight: 48.51, aspectRatio: 734.53 / 48.51 },
   // DUAS-LINHAS: mesma frase em vetor (contornos), sem dependência de fonte
-  b: { src: '/assets/tagline-b.svg', naturalWidth: 402.02, naturalHeight: 83.36, aspectRatio: 402.02 / 83.36 },
+  b: { src: assetUrl('assets/tagline-b.svg'), naturalWidth: 402.02, naturalHeight: 83.36, aspectRatio: 402.02 / 83.36 },
 }
 
 export interface ResolvedAsset {
