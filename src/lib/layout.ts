@@ -99,9 +99,9 @@ export function computeLayout(
   let etiquetaRect: Rect
   if (isWide) {
     // Etiqueta move para a parte inferior, centralizada horizontalmente, com
-    // a base da caixa de conteúdo colada exatamente onde a foto termina (o
-    // arquivo renderizado, com sua folga/sombra, sangra para baixo a partir daí).
-    const defaultY = bandTop - etiquetaHeight
+    // o topo da caixa de conteúdo colado exatamente onde a foto termina (o
+    // arquivo renderizado, com sua folga/sombra, pendura para baixo a partir daí).
+    const defaultY = bandTop
     const defaultX = (widthPx - etiquetaWidth) / 2
     etiquetaRect = {
       x: overrides.etiquetaPos?.x ?? defaultX,
