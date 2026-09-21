@@ -19,6 +19,33 @@ import type { Rect } from './layout'
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const PLACEHOLDER_GRAY = '#9aa5ab'
 
+// Fonte customizada da tagline (variante A). Registrada no jsPDF para que
+// svg2pdf.js converta o texto em glifos vetoriais reais, em vez de cair
+// numa fonte padrão do PDF.
+const HERING_FONT_FILE = 'HeringSans-Bold.ttf'
+const HERING_FONT_FAMILY = 'HeringSans-Bold'
+let heringFontBase64: Promise<string> | null = null
+
+function loadHeringFontBase64(): Promise<string> {
+  if (!heringFontBase64) {
+    heringFontBase64 = fetch('/assets/fonts/HeringSans-Bold.ttf')
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        const bytes = new Uint8Array(buf)
+        let binary = ''
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        return btoa(binary)
+      })
+  }
+  return heringFontBase64
+}
+
+async function registerCustomFonts(pdf: jsPDF) {
+  const base64 = await loadHeringFontBase64()
+  pdf.addFileToVFS(HERING_FONT_FILE, base64)
+  pdf.addFont(HERING_FONT_FILE, HERING_FONT_FAMILY, 'normal', 700)
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -248,6 +275,7 @@ export async function exportFramePDF(frame: Frame): Promise<void> {
       format: [widthMm, heightMm],
       orientation: widthMm > heightMm ? 'landscape' : 'portrait',
     })
+    await registerCustomFonts(pdf)
     await pdf.svg(svg, { x: 0, y: 0, width: widthMm, height: heightMm })
     pdf.save(filenameFor(frame, 'pdf'))
   } finally {

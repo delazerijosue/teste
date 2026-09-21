@@ -46,8 +46,10 @@ function contentAspectRatio(naturalWidth: number, naturalHeight: number, inset: 
 }
 
 export const TAGLINES: Record<TaglineVariant, { src: string; naturalWidth: number; naturalHeight: number; aspectRatio: number }> = {
-  a: { src: '/assets/tagline-a.svg', naturalWidth: 600, naturalHeight: 140, aspectRatio: 600 / 140 },
-  b: { src: '/assets/tagline-b.svg', naturalWidth: 600, naturalHeight: 120, aspectRatio: 600 / 120 },
+  // UMA-LINHA: "A gente veste o Brasil. Desde 1880." (texto, fonte Hering Sans)
+  a: { src: '/assets/tagline-a.svg', naturalWidth: 734.53, naturalHeight: 48.51, aspectRatio: 734.53 / 48.51 },
+  // DUAS-LINHAS: mesma frase em vetor (contornos), sem dependência de fonte
+  b: { src: '/assets/tagline-b.svg', naturalWidth: 402.02, naturalHeight: 83.36, aspectRatio: 402.02 / 83.36 },
 }
 
 export interface ResolvedAsset {
