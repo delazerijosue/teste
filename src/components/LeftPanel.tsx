@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useStore } from '../state/store'
 import type { Unit } from '../lib/units'
+import { getFrameLabel } from '../lib/frame'
 import { OverridesEditor } from './OverridesEditor'
 import './LeftPanel.css'
 
@@ -14,6 +15,7 @@ export function LeftPanel() {
   const selectedFrameId = useStore((s) => s.selectedFrameId)
   const selectFrame = useStore((s) => s.selectFrame)
   const removeFrame = useStore((s) => s.removeFrame)
+  const duplicateFrame = useStore((s) => s.duplicateFrame)
 
   const [width, setWidth] = useState('1080')
   const [height, setHeight] = useState('1350')
@@ -99,18 +101,31 @@ export function LeftPanel() {
                 className={f.id === selectedFrameId ? 'active' : ''}
                 onClick={() => selectFrame(f.id)}
               >
-                <span>{f.name}</span>
-                <button
-                  className="secondary frame-list__remove"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    removeFrame(f.id)
-                  }}
-                  title="Remover frame"
-                  type="button"
-                >
-                  ×
-                </button>
+                <span className="frame-list__name">{getFrameLabel(f)}</span>
+                <span className="frame-list__actions">
+                  <button
+                    className="secondary frame-list__icon-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      duplicateFrame(f.id)
+                    }}
+                    title="Duplicar frame"
+                    type="button"
+                  >
+                    ⧉
+                  </button>
+                  <button
+                    className="secondary frame-list__icon-btn"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeFrame(f.id)
+                    }}
+                    title="Remover frame"
+                    type="button"
+                  >
+                    ×
+                  </button>
+                </span>
               </li>
             ))}
           </ul>

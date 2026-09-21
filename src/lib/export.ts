@@ -1,18 +1,20 @@
 /**
  * Export engine (Seção 7).
  *  - PNG: rasterized on an offscreen canvas at 150 DPI.
- *  - PDF: vector — built as an SVG document and converted with svg2pdf.js,
- *    so the tagline (SVG) keeps real vector paths. The etiqueta (PNG) and
- *    the photo are raster, embedded at full asset resolution, since both
- *    are raster sources by nature.
+ *  - PDF: vector — built as an SVG document and converted with svg2pdf.js.
+ *    Etiqueta e tagline entram como vetor real (<g> com o markup SVG
+ *    inlined) quando o asset (padrão ou enviado pelo usuário) é SVG;
+ *    quando é PNG/JPG (padrão ou upload), entram como raster embutido em
+ *    alta resolução. A foto é sempre raster, por natureza.
  */
 import { jsPDF } from 'jspdf'
 import 'svg2pdf.js'
 import { computeLayout, resolveTaglineVariant } from './layout'
-import { ETIQUETA, TAGLINES } from './assets'
+import { resolveEtiquetaAsset, resolveTaglineAsset, type ResolvedAsset } from './assets'
 import { coverScale } from './photo'
 import { pxToMm, pxToExportPixels } from './units'
 import type { Frame } from '../types'
+import type { Rect } from './layout'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const PLACEHOLDER_GRAY = '#9aa5ab'
@@ -27,7 +29,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
-function photoDisplayRect(frame: Frame, photoArea: ReturnType<typeof computeLayout>['photoArea']) {
+function photoDisplayRect(frame: Frame, photoArea: Rect) {
   if (!frame.photo) return null
   const base = coverScale(photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight)
   const width = frame.photo.naturalWidth * base * frame.photo.transform.scale
@@ -39,9 +41,10 @@ function photoDisplayRect(frame: Frame, photoArea: ReturnType<typeof computeLayo
 
 function frameLayout(frame: Frame) {
   const variant = resolveTaglineVariant(frame.overrides)
-  const tagline = TAGLINES[variant]
-  const layout = computeLayout(frame.widthPx, frame.heightPx, frame.overrides, ETIQUETA.aspectRatio, tagline.aspectRatio)
-  return { layout, tagline }
+  const etiqueta = resolveEtiquetaAsset(frame)
+  const tagline = resolveTaglineAsset(frame, variant)
+  const layout = computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
+  return { layout, etiqueta, tagline }
 }
 
 function filenameFor(frame: Frame, ext: string): string {
@@ -63,7 +66,7 @@ function downloadBlob(blob: Blob, filename: string) {
 // ---------- PNG (150 DPI) ----------
 
 export async function exportFramePNG(frame: Frame): Promise<void> {
-  const { layout, tagline } = frameLayout(frame)
+  const { layout, etiqueta, tagline } = frameLayout(frame)
   const scale = pxToExportPixels(1)
 
   const canvas = document.createElement('canvas')
@@ -90,8 +93,8 @@ export async function exportFramePNG(frame: Frame): Promise<void> {
   }
   ctx.restore()
 
-  // Etiqueta
-  const etiquetaImg = await loadImage(ETIQUETA.src)
+  // Etiqueta (raster ou SVG — <img> rasteriza ambos igual)
+  const etiquetaImg = await loadImage(etiqueta.src)
   ctx.drawImage(
     etiquetaImg,
     layout.etiqueta.x * scale,
@@ -100,7 +103,7 @@ export async function exportFramePNG(frame: Frame): Promise<void> {
     layout.etiqueta.height * scale,
   )
 
-  // Tagline (rasterize the SVG)
+  // Tagline (raster ou SVG)
   const taglineImg = await loadImage(tagline.src)
   ctx.drawImage(
     taglineImg,
@@ -118,33 +121,59 @@ export async function exportFramePNG(frame: Frame): Promise<void> {
 
 // ---------- PDF (vector) ----------
 
-let taglineSourceCache: Record<string, Promise<{ inner: string; viewBox: [number, number, number, number] }>> = {}
+const svgSourceCache: Record<string, Promise<{ inner: string; viewBox: [number, number, number, number] }>> = {}
 
-function fetchTaglineSource(src: string) {
-  if (!taglineSourceCache[src]) {
-    taglineSourceCache[src] = fetch(src)
-      .then((r) => r.text())
-      .then((text) => {
-        const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
-        const root = doc.documentElement
-        const vb = (root.getAttribute('viewBox') ?? '0 0 100 100').split(/\s+/).map(Number) as [
-          number,
-          number,
-          number,
-          number,
-        ]
-        return { inner: root.innerHTML, viewBox: vb }
-      })
+function parseSvgMarkup(text: string): { inner: string; viewBox: [number, number, number, number] } {
+  const doc = new DOMParser().parseFromString(text, 'image/svg+xml')
+  const root = doc.documentElement
+  let viewBox = (root.getAttribute('viewBox') ?? '').trim().split(/\s+/).map(Number)
+  if (viewBox.length !== 4 || viewBox.some(Number.isNaN)) {
+    const w = parseFloat(root.getAttribute('width') ?? '100')
+    const h = parseFloat(root.getAttribute('height') ?? '100')
+    viewBox = [0, 0, w, h]
   }
-  return taglineSourceCache[src]
+  return { inner: root.innerHTML, viewBox: viewBox as [number, number, number, number] }
+}
+
+function getSvgSource(asset: ResolvedAsset) {
+  if (asset.svgText) return Promise.resolve(parseSvgMarkup(asset.svgText))
+  if (!svgSourceCache[asset.src]) {
+    svgSourceCache[asset.src] = fetch(asset.src)
+      .then((r) => r.text())
+      .then(parseSvgMarkup)
+  }
+  return svgSourceCache[asset.src]
+}
+
+/** Adiciona um asset (etiqueta ou tagline) ao SVG de exportação, como vetor real quando é SVG, ou <image> raster caso contrário. */
+async function appendAsset(svg: SVGSVGElement, asset: ResolvedAsset, rect: Rect) {
+  if (asset.kind === 'svg') {
+    const { inner, viewBox } = await getSvgSource(asset)
+    const [, , vbWidth, vbHeight] = viewBox
+    const group = document.createElementNS(SVG_NS, 'g')
+    const scaleX = rect.width / vbWidth
+    const scaleY = rect.height / vbHeight
+    group.setAttribute('transform', `translate(${rect.x}, ${rect.y}) scale(${scaleX}, ${scaleY})`)
+    group.innerHTML = inner
+    svg.appendChild(group)
+  } else {
+    const image = document.createElementNS(SVG_NS, 'image')
+    image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', asset.src)
+    image.setAttribute('href', asset.src)
+    image.setAttribute('x', String(rect.x))
+    image.setAttribute('y', String(rect.y))
+    image.setAttribute('width', String(rect.width))
+    image.setAttribute('height', String(rect.height))
+    svg.appendChild(image)
+  }
 }
 
 export async function exportFramePDF(frame: Frame): Promise<void> {
-  const { layout, tagline } = frameLayout(frame)
+  const { layout, etiqueta, tagline } = frameLayout(frame)
   const widthMm = pxToMm(frame.widthPx)
   const heightMm = pxToMm(frame.heightPx)
 
-  const svg = document.createElementNS(SVG_NS, 'svg')
+  const svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement
   svg.setAttribute('xmlns', SVG_NS)
   svg.setAttribute('width', String(frame.widthPx))
   svg.setAttribute('height', String(frame.heightPx))
@@ -197,28 +226,8 @@ export async function exportFramePDF(frame: Frame): Promise<void> {
     svg.appendChild(placeholder)
   }
 
-  // Etiqueta (raster PNG, embedded at native resolution)
-  const etiquetaImage = document.createElementNS(SVG_NS, 'image')
-  etiquetaImage.setAttributeNS('http://www.w3.org/1999/xlink', 'href', ETIQUETA.src)
-  etiquetaImage.setAttribute('href', ETIQUETA.src)
-  etiquetaImage.setAttribute('x', String(layout.etiqueta.x))
-  etiquetaImage.setAttribute('y', String(layout.etiqueta.y))
-  etiquetaImage.setAttribute('width', String(layout.etiqueta.width))
-  etiquetaImage.setAttribute('height', String(layout.etiqueta.height))
-  svg.appendChild(etiquetaImage)
-
-  // Tagline (inlined as vector paths)
-  const { inner, viewBox } = await fetchTaglineSource(tagline.src)
-  const taglineGroup = document.createElementNS(SVG_NS, 'g')
-  const [, , vbWidth, vbHeight] = viewBox
-  const scaleX = layout.tagline.width / vbWidth
-  const scaleY = layout.tagline.height / vbHeight
-  taglineGroup.setAttribute(
-    'transform',
-    `translate(${layout.tagline.x}, ${layout.tagline.y}) scale(${scaleX}, ${scaleY})`,
-  )
-  taglineGroup.innerHTML = inner
-  svg.appendChild(taglineGroup)
+  await appendAsset(svg, etiqueta, layout.etiqueta)
+  await appendAsset(svg, tagline, layout.tagline)
 
   document.body.appendChild(svg)
   try {

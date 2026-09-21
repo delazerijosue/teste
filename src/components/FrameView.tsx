@@ -1,8 +1,9 @@
 import { useCallback, useMemo, useRef, type PointerEvent } from 'react'
 import { useStore } from '../state/store'
 import { computeLayout, resolveTaglineVariant } from '../lib/layout'
-import { ETIQUETA, TAGLINES } from '../lib/assets'
+import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
 import { fromPx } from '../lib/units'
+import { getFrameLabel } from '../lib/frame'
 import { PhotoLayer } from './PhotoLayer'
 import type { Frame } from '../types'
 import './FrameView.css'
@@ -16,11 +17,12 @@ export function FrameView({ frame }: { frame: Frame }) {
 
   const isSelected = selectedFrameId === frame.id
   const variant = resolveTaglineVariant(frame.overrides)
-  const tagline = TAGLINES[variant]
+  const etiquetaAsset = resolveEtiquetaAsset(frame)
+  const taglineAsset = resolveTaglineAsset(frame, variant)
 
   const layout = useMemo(
-    () => computeLayout(frame.widthPx, frame.heightPx, frame.overrides, ETIQUETA.aspectRatio, tagline.aspectRatio),
-    [frame.widthPx, frame.heightPx, frame.overrides, tagline.aspectRatio],
+    () => computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio),
+    [frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio],
   )
 
   const dragState = useRef<{ startX: number; startY: number; frameX: number; frameY: number } | null>(null)
@@ -70,7 +72,7 @@ export function FrameView({ frame }: { frame: Frame }) {
       <PhotoLayer frame={frame} photoArea={layout.photoArea} />
 
       <img
-        src={ETIQUETA.src}
+        src={etiquetaAsset.src}
         alt="Etiqueta"
         className="frame__etiqueta"
         draggable={false}
@@ -83,7 +85,7 @@ export function FrameView({ frame }: { frame: Frame }) {
       />
 
       <img
-        src={tagline.src}
+        src={taglineAsset.src}
         alt="Tagline"
         className="frame__tagline"
         draggable={false}
@@ -97,7 +99,7 @@ export function FrameView({ frame }: { frame: Frame }) {
 
       {debugMode && isSelected && <DebugOverlay frame={frame} layout={layout} />}
 
-      <div className="frame__label">{frame.name}</div>
+      <div className="frame__label">{getFrameLabel(frame)}</div>
     </div>
   )
 }

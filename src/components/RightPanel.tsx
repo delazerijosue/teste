@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../state/store'
 import { computeLayout, resolveTaglineVariant } from '../lib/layout'
-import { ETIQUETA, TAGLINES } from '../lib/assets'
+import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
 import { formatMeasurement } from '../lib/units'
+import { getFrameLabel } from '../lib/frame'
 import { exportFramePDF, exportFramePNG } from '../lib/export'
 import './RightPanel.css'
 
@@ -12,14 +13,15 @@ export function RightPanel({ frameId }: { frameId: string }) {
   const [error, setError] = useState<string | null>(null)
 
   const variant = frame ? resolveTaglineVariant(frame.overrides) : 'a'
-  const tagline = TAGLINES[variant]
+  const etiquetaAsset = frame ? resolveEtiquetaAsset(frame) : null
+  const taglineAsset = frame ? resolveTaglineAsset(frame, variant) : null
 
   const layout = useMemo(() => {
-    if (!frame) return null
-    return computeLayout(frame.widthPx, frame.heightPx, frame.overrides, ETIQUETA.aspectRatio, tagline.aspectRatio)
-  }, [frame, tagline.aspectRatio])
+    if (!frame || !etiquetaAsset || !taglineAsset) return null
+    return computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio)
+  }, [frame, etiquetaAsset, taglineAsset])
 
-  if (!frame || !layout) return null
+  if (!frame || !layout || !etiquetaAsset || !taglineAsset) return null
 
   const runExport = async (kind: 'pdf' | 'png') => {
     setError(null)
@@ -37,7 +39,7 @@ export function RightPanel({ frameId }: { frameId: string }) {
 
   return (
     <div className="right-panel">
-      <h2>{frame.name}</h2>
+      <h2>{getFrameLabel(frame)}</h2>
 
       <dl className="details-list">
         <div>
@@ -55,8 +57,12 @@ export function RightPanel({ frameId }: { frameId: string }) {
           <dd>{frame.photo ? 'Enviada' : 'Não enviada (espaço cinza)'}</dd>
         </div>
         <div>
-          <dt>Variante da tagline</dt>
-          <dd>{variant.toUpperCase()}</dd>
+          <dt>Etiqueta</dt>
+          <dd>{etiquetaAsset.isCustom ? 'Personalizada' : 'Padrão do sistema'}</dd>
+        </div>
+        <div>
+          <dt>Tagline</dt>
+          <dd>{taglineAsset.isCustom ? 'Personalizada' : `Variante ${variant.toUpperCase()}`}</dd>
         </div>
         <div>
           <dt>Margem inferior</dt>

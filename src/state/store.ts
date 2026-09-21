@@ -1,7 +1,10 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
-import { defaultOverrides, type FrameOverrides } from '../lib/layout'
+import { computeLayout, defaultOverrides, resolveTaglineVariant, type FrameOverrides } from '../lib/layout'
+import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
+import { clampOffset } from '../lib/photo'
 import { toPx, type Unit } from '../lib/units'
+import type { CustomAsset } from '../lib/customAssets'
 import type { Frame, PhotoState } from '../types'
 
 interface CanvasView {
@@ -18,13 +21,17 @@ interface AppState {
   canvasView: CanvasView
 
   createFrame: (input: { width: number; height: number; unit: Unit }) => string
+  duplicateFrame: (id: string) => string | null
   selectFrame: (id: string | null) => void
   removeFrame: (id: string) => void
   moveFrame: (id: string, canvasX: number, canvasY: number) => void
+  resizeFrame: (id: string, width: number, height: number) => void
   updateOverrides: (id: string, patch: Partial<FrameOverrides>) => void
   clearOverride: (id: string, key: keyof FrameOverrides) => void
   setPhoto: (id: string, photo: PhotoState | null) => void
   updatePhotoTransform: (id: string, transform: PhotoState['transform']) => void
+  setCustomEtiqueta: (id: string, asset: CustomAsset | null) => void
+  setCustomTagline: (id: string, asset: CustomAsset | null) => void
   toggleDebug: () => void
   toggleLeftPanel: () => void
   setCanvasView: (view: Partial<CanvasView>) => void
@@ -62,9 +69,30 @@ export const useStore = create<AppState>((set, get) => ({
       canvasY: y,
       overrides: defaultOverrides(),
       photo: null,
+      customEtiqueta: null,
+      customTagline: null,
     }
     set((s) => ({ frames: [...s.frames, frame], selectedFrameId: id }))
     return id
+  },
+
+  duplicateFrame: (id) => {
+    const source = get().frames.find((f) => f.id === id)
+    if (!source) return null
+    const newId = nanoid()
+    const clone: Frame = {
+      ...source,
+      id: newId,
+      name: `${source.name} cópia`,
+      canvasX: source.canvasX + 48,
+      canvasY: source.canvasY + 48,
+      overrides: { ...source.overrides, etiquetaPos: source.overrides.etiquetaPos ? { ...source.overrides.etiquetaPos } : undefined },
+      photo: source.photo ? { ...source.photo, transform: { ...source.photo.transform } } : null,
+      customEtiqueta: source.customEtiqueta ? { ...source.customEtiqueta } : null,
+      customTagline: source.customTagline ? { ...source.customTagline } : null,
+    }
+    set((s) => ({ frames: [...s.frames, clone], selectedFrameId: newId }))
+    return newId
   },
 
   selectFrame: (id) => set({ selectedFrameId: id }),
@@ -78,6 +106,25 @@ export const useStore = create<AppState>((set, get) => ({
   moveFrame: (id, canvasX, canvasY) =>
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, canvasX, canvasY } : f)),
+    })),
+
+  resizeFrame: (id, width, height) =>
+    set((s) => ({
+      frames: s.frames.map((f) => {
+        if (f.id !== id || width <= 0 || height <= 0) return f
+        const widthPx = toPx(width, f.unit)
+        const heightPx = toPx(height, f.unit)
+        const resized: Frame = { ...f, widthPx, heightPx, inputWidth: width, inputHeight: height }
+
+        if (!resized.photo) return resized
+
+        const variant = resolveTaglineVariant(resized.overrides)
+        const etiqueta = resolveEtiquetaAsset(resized)
+        const tagline = resolveTaglineAsset(resized, variant)
+        const layout = computeLayout(widthPx, heightPx, resized.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
+        const clamped = clampOffset(layout.photoArea, resized.photo.naturalWidth, resized.photo.naturalHeight, resized.photo.transform)
+        return { ...resized, photo: { ...resized.photo, transform: clamped } }
+      }),
     })),
 
   updateOverrides: (id, patch) =>
@@ -107,6 +154,16 @@ export const useStore = create<AppState>((set, get) => ({
       frames: s.frames.map((f) =>
         f.id === id && f.photo ? { ...f, photo: { ...f.photo, transform } } : f,
       ),
+    })),
+
+  setCustomEtiqueta: (id, asset) =>
+    set((s) => ({
+      frames: s.frames.map((f) => (f.id === id ? { ...f, customEtiqueta: asset } : f)),
+    })),
+
+  setCustomTagline: (id, asset) =>
+    set((s) => ({
+      frames: s.frames.map((f) => (f.id === id ? { ...f, customTagline: asset } : f)),
     })),
 
   toggleDebug: () => set((s) => ({ debugMode: !s.debugMode })),

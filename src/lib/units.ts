@@ -26,3 +26,10 @@ export function formatMeasurement(px: number, unit: Unit): string {
   const value = fromPx(px, unit)
   return `${value.toFixed(unit === 'cm' ? 2 : 0)} ${unit}`
 }
+
+export function formatFrameSize(widthPx: number, heightPx: number, unit: Unit): string {
+  const decimals = unit === 'cm' ? 2 : 0
+  const w = fromPx(widthPx, unit).toFixed(decimals)
+  const h = fromPx(heightPx, unit).toFixed(decimals)
+  return `${w}×${h} ${unit}`
+}

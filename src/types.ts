@@ -1,6 +1,7 @@
 import type { FrameOverrides } from './lib/layout'
 import type { PhotoTransform } from './lib/photo'
 import type { Unit } from './lib/units'
+import type { CustomAsset } from './lib/customAssets'
 
 export interface PhotoState {
   src: string
@@ -21,4 +22,6 @@ export interface Frame {
   canvasY: number
   overrides: FrameOverrides
   photo: PhotoState | null
+  customEtiqueta: CustomAsset | null
+  customTagline: CustomAsset | null
 }

@@ -43,3 +43,24 @@
   color: #8fa2ab;
   margin: 0;
 }
+
+.asset-status {
+  font-size: 11px;
+  color: #8fa2ab;
+  margin: 0;
+}
+
+.asset-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.asset-actions button {
+  flex: 1;
+  font-size: 11px;
+  padding: 6px 4px;
+}
+
+.hidden-input {
+  display: none;
+}

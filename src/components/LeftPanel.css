@@ -85,9 +85,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   padding: 6px 8px;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -99,10 +100,22 @@
   background: rgba(0, 103, 179, 0.25);
 }
 
-.frame-list__remove {
-  padding: 2px 8px;
-  font-size: 14px;
-  line-height: 1;
+.frame-list__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.frame-list__actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.frame-list__icon-btn {
+  padding: 2px 7px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .left-panel__overrides {
