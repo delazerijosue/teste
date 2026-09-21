@@ -16,6 +16,10 @@ export function LeftPanel() {
   const selectFrame = useStore((s) => s.selectFrame)
   const removeFrame = useStore((s) => s.removeFrame)
   const duplicateFrame = useStore((s) => s.duplicateFrame)
+  const undo = useStore((s) => s.undo)
+  const redo = useStore((s) => s.redo)
+  const canUndo = useStore((s) => s.past.length > 0)
+  const canRedo = useStore((s) => s.future.length > 0)
 
   const [width, setWidth] = useState('1080')
   const [height, setHeight] = useState('1350')
@@ -49,6 +53,15 @@ export function LeftPanel() {
           «
         </button>
       </div>
+
+      <section className="left-panel__section left-panel__history">
+        <button className="secondary" onClick={undo} disabled={!canUndo} title="Desfazer (Cmd/Ctrl+Z)">
+          ↶ Desfazer
+        </button>
+        <button className="secondary" onClick={redo} disabled={!canRedo} title="Refazer (Cmd/Ctrl+Shift+Z)">
+          ↷ Refazer
+        </button>
+      </section>
 
       <section className="left-panel__section">
         <h2>Novo frame</h2>

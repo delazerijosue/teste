@@ -43,6 +43,11 @@ npm run preview
 - `src/lib/export.ts` — exportação PDF (vetorial via SVG) e PNG (150 DPI).
 - `src/components/` — Canvas (pan/zoom estilo Figma), FrameView, PhotoLayer,
   painéis de controle esquerdo/direito.
-- `public/assets/` — etiqueta (PNG) e as duas variantes de tagline (SVG),
-  assets fixos do sistema (placeholders — substitua pelos arquivos de marca
-  reais mantendo formato e proporção semelhantes).
+- `public/assets/` — assets fixos do sistema: etiqueta (`etiqueta-frente.png`
+  + `etiqueta-sombra.png`, a sombra desenhada atrás em modo *multiply*) e as
+  duas variantes de tagline (SVG). O desconto de borda da etiqueta (usado só
+  no cálculo de posição/tamanho, não no desenho) fica em
+  `ETIQUETA_INSET` (`src/lib/assets.ts`).
+- Cada frame também pode ter etiqueta/tagline **personalizadas** (upload
+  PNG/JPG/SVG só para aquele frame, veja o painel de ajustes), além de
+  **desfazer/refazer** (Cmd/Ctrl+Z) para as principais ações.

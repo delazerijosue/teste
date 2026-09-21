@@ -121,3 +121,13 @@
 .left-panel__overrides {
   flex: 1;
 }
+
+.left-panel__history {
+  display: flex;
+  gap: 8px;
+}
+
+.left-panel__history button {
+  flex: 1;
+  font-size: 12px;
+}

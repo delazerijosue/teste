@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, type PointerEvent } from 'react'
 import { useStore } from '../state/store'
 import { computeLayout, resolveTaglineVariant } from '../lib/layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
+import { resolveEtiquetaAsset, resolveTaglineAsset, getEtiquetaRenderRect } from '../lib/assets'
 import { fromPx } from '../lib/units'
 import { getFrameLabel } from '../lib/frame'
 import { PhotoLayer } from './PhotoLayer'
@@ -13,6 +13,7 @@ export function FrameView({ frame }: { frame: Frame }) {
   const debugMode = useStore((s) => s.debugMode)
   const selectFrame = useStore((s) => s.selectFrame)
   const moveFrame = useStore((s) => s.moveFrame)
+  const snapshot = useStore((s) => s.snapshot)
   const zoom = useStore((s) => s.canvasView.zoom)
 
   const isSelected = selectedFrameId === frame.id
@@ -31,10 +32,11 @@ export function FrameView({ frame }: { frame: Frame }) {
     (e: PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return
       selectFrame(frame.id)
+      snapshot()
       dragState.current = { startX: e.clientX, startY: e.clientY, frameX: frame.canvasX, frameY: frame.canvasY }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [frame.id, frame.canvasX, frame.canvasY, selectFrame],
+    [frame.id, frame.canvasX, frame.canvasY, selectFrame, snapshot],
   )
 
   const onPointerMove = useCallback(
@@ -71,18 +73,7 @@ export function FrameView({ frame }: { frame: Frame }) {
     >
       <PhotoLayer frame={frame} photoArea={layout.photoArea} />
 
-      <img
-        src={etiquetaAsset.src}
-        alt="Etiqueta"
-        className="frame__etiqueta"
-        draggable={false}
-        style={{
-          left: layout.etiqueta.x,
-          top: layout.etiqueta.y,
-          width: layout.etiqueta.width,
-          height: layout.etiqueta.height,
-        }}
-      />
+      <EtiquetaLayers asset={etiquetaAsset} contentBox={layout.etiqueta} />
 
       <img
         src={taglineAsset.src}
@@ -101,6 +92,25 @@ export function FrameView({ frame }: { frame: Frame }) {
 
       <div className="frame__label">{getFrameLabel(frame)}</div>
     </div>
+  )
+}
+
+function EtiquetaLayers({
+  asset,
+  contentBox,
+}: {
+  asset: ReturnType<typeof resolveEtiquetaAsset>
+  contentBox: ReturnType<typeof computeLayout>['etiqueta']
+}) {
+  const rect = getEtiquetaRenderRect(asset, contentBox)
+  const style = { left: rect.x, top: rect.y, width: rect.width, height: rect.height }
+  return (
+    <>
+      {asset.shadow && (
+        <img src={asset.shadow.src} alt="" className="frame__etiqueta frame__etiqueta--shadow" draggable={false} style={style} />
+      )}
+      <img src={asset.front.src} alt="Etiqueta" className="frame__etiqueta" draggable={false} style={style} />
+    </>
   )
 }
 

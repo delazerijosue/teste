@@ -94,7 +94,9 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
       <fieldset>
         <legend>Etiqueta</legend>
         <p className="asset-status">
-          {etiquetaAsset.isCustom ? 'Etiqueta personalizada enviada' : 'Usando etiqueta padrão do sistema'}
+          {etiquetaAsset.isCustom
+            ? 'Etiqueta personalizada enviada (sem sombra)'
+            : 'Usando etiqueta padrão do sistema (frente + sombra)'}
         </p>
         <div className="asset-actions">
           <button type="button" className="secondary" onClick={() => etiquetaInputRef.current?.click()}>

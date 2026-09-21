@@ -13,12 +13,26 @@ interface CanvasView {
   zoom: number
 }
 
+interface HistoryEntry {
+  frames: Frame[]
+  selectedFrameId: string | null
+}
+
+const MAX_HISTORY = 50
+
 interface AppState {
   frames: Frame[]
   selectedFrameId: string | null
   debugMode: boolean
   leftPanelCollapsed: boolean
   canvasView: CanvasView
+  past: HistoryEntry[]
+  future: HistoryEntry[]
+
+  /** Salva o estado atual no histórico de undo. Chame antes de uma mudança que deva ser desfazível. */
+  snapshot: () => void
+  undo: () => void
+  redo: () => void
 
   createFrame: (input: { width: number; height: number; unit: Unit }) => string
   duplicateFrame: (id: string) => string | null
@@ -51,8 +65,44 @@ export const useStore = create<AppState>((set, get) => ({
   debugMode: false,
   leftPanelCollapsed: false,
   canvasView: { x: 0, y: 0, zoom: 1 },
+  past: [],
+  future: [],
+
+  snapshot: () => {
+    const { frames, selectedFrameId, past } = get()
+    const entry: HistoryEntry = { frames, selectedFrameId }
+    const nextPast = [...past, entry].slice(-MAX_HISTORY)
+    set({ past: nextPast, future: [] })
+  },
+
+  undo: () => {
+    const { past, future, frames, selectedFrameId } = get()
+    if (past.length === 0) return
+    const previous = past[past.length - 1]
+    const current: HistoryEntry = { frames, selectedFrameId }
+    set({
+      frames: previous.frames,
+      selectedFrameId: previous.selectedFrameId,
+      past: past.slice(0, -1),
+      future: [...future, current],
+    })
+  },
+
+  redo: () => {
+    const { past, future, frames, selectedFrameId } = get()
+    if (future.length === 0) return
+    const next = future[future.length - 1]
+    const current: HistoryEntry = { frames, selectedFrameId }
+    set({
+      frames: next.frames,
+      selectedFrameId: next.selectedFrameId,
+      past: [...past, current],
+      future: future.slice(0, -1),
+    })
+  },
 
   createFrame: ({ width, height, unit }) => {
+    get().snapshot()
     const widthPx = toPx(width, unit)
     const heightPx = toPx(height, unit)
     const { x, y } = nextFramePosition(get().frames)
@@ -77,6 +127,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   duplicateFrame: (id) => {
+    get().snapshot()
     const source = get().frames.find((f) => f.id === id)
     if (!source) return null
     const newId = nanoid()
@@ -97,18 +148,21 @@ export const useStore = create<AppState>((set, get) => ({
 
   selectFrame: (id) => set({ selectedFrameId: id }),
 
-  removeFrame: (id) =>
+  removeFrame: (id) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.filter((f) => f.id !== id),
       selectedFrameId: s.selectedFrameId === id ? null : s.selectedFrameId,
-    })),
+    }))
+  },
 
   moveFrame: (id, canvasX, canvasY) =>
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, canvasX, canvasY } : f)),
     })),
 
-  resizeFrame: (id, width, height) =>
+  resizeFrame: (id, width, height) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) => {
         if (f.id !== id || width <= 0 || height <= 0) return f
@@ -125,16 +179,20 @@ export const useStore = create<AppState>((set, get) => ({
         const clamped = clampOffset(layout.photoArea, resized.photo.naturalWidth, resized.photo.naturalHeight, resized.photo.transform)
         return { ...resized, photo: { ...resized.photo, transform: clamped } }
       }),
-    })),
+    }))
+  },
 
-  updateOverrides: (id, patch) =>
+  updateOverrides: (id, patch) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) =>
         f.id === id ? { ...f, overrides: { ...f.overrides, ...patch } } : f,
       ),
-    })),
+    }))
+  },
 
-  clearOverride: (id, key) =>
+  clearOverride: (id, key) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) => {
         if (f.id !== id) return f
@@ -142,12 +200,15 @@ export const useStore = create<AppState>((set, get) => ({
         delete overrides[key]
         return { ...f, overrides }
       }),
-    })),
+    }))
+  },
 
-  setPhoto: (id, photo) =>
+  setPhoto: (id, photo) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, photo } : f)),
-    })),
+    }))
+  },
 
   updatePhotoTransform: (id, transform) =>
     set((s) => ({
@@ -156,15 +217,19 @@ export const useStore = create<AppState>((set, get) => ({
       ),
     })),
 
-  setCustomEtiqueta: (id, asset) =>
+  setCustomEtiqueta: (id, asset) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, customEtiqueta: asset } : f)),
-    })),
+    }))
+  },
 
-  setCustomTagline: (id, asset) =>
+  setCustomTagline: (id, asset) => {
+    get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, customTagline: asset } : f)),
-    })),
+    }))
+  },
 
   toggleDebug: () => set((s) => ({ debugMode: !s.debugMode })),
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),

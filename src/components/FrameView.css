@@ -17,6 +17,10 @@
   pointer-events: none;
 }
 
+.frame__etiqueta--shadow {
+  mix-blend-mode: multiply;
+}
+
 .frame__label {
   position: absolute;
   bottom: 100%;

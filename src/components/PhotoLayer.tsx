@@ -11,6 +11,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
   const selectedFrameId = useStore((s) => s.selectedFrameId)
   const setPhoto = useStore((s) => s.setPhoto)
   const updatePhotoTransform = useStore((s) => s.updatePhotoTransform)
+  const snapshot = useStore((s) => s.snapshot)
   const canvasZoom = useStore((s) => s.canvasView.zoom)
   const isSelected = selectedFrameId === frame.id
 
@@ -44,6 +45,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
     (e: PointerEvent<HTMLDivElement>) => {
       if (!frame.photo) return
       e.stopPropagation()
+      snapshot()
       dragState.current = {
         startX: e.clientX,
         startY: e.clientY,
@@ -52,7 +54,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
       }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [frame.photo],
+    [frame.photo, snapshot],
   )
 
   const onPointerMove = useCallback(
@@ -149,6 +151,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
             max={MAX_ZOOM}
             step={0.01}
             value={frame.photo.transform.scale}
+            onPointerDown={() => snapshot()}
             onChange={onZoomChange}
           />
         </div>

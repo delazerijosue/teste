@@ -10,7 +10,7 @@
 import { jsPDF } from 'jspdf'
 import 'svg2pdf.js'
 import { computeLayout, resolveTaglineVariant } from './layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset, type ResolvedAsset } from './assets'
+import { resolveEtiquetaAsset, resolveTaglineAsset, getEtiquetaRenderRect, type EtiquetaLayer } from './assets'
 import { coverScale } from './photo'
 import { pxToMm, pxToExportPixels } from './units'
 import type { Frame } from '../types'
@@ -93,14 +93,22 @@ export async function exportFramePNG(frame: Frame): Promise<void> {
   }
   ctx.restore()
 
-  // Etiqueta (raster ou SVG — <img> rasteriza ambos igual)
-  const etiquetaImg = await loadImage(etiqueta.src)
+  // Etiqueta: sombra (multiply) atrás + frente, no retângulo expandido pelo inset
+  const etiquetaRect = getEtiquetaRenderRect(etiqueta, layout.etiqueta)
+  if (etiqueta.shadow) {
+    const shadowImg = await loadImage(etiqueta.shadow.src)
+    ctx.save()
+    ctx.globalCompositeOperation = 'multiply'
+    ctx.drawImage(shadowImg, etiquetaRect.x * scale, etiquetaRect.y * scale, etiquetaRect.width * scale, etiquetaRect.height * scale)
+    ctx.restore()
+  }
+  const etiquetaImg = await loadImage(etiqueta.front.src)
   ctx.drawImage(
     etiquetaImg,
-    layout.etiqueta.x * scale,
-    layout.etiqueta.y * scale,
-    layout.etiqueta.width * scale,
-    layout.etiqueta.height * scale,
+    etiquetaRect.x * scale,
+    etiquetaRect.y * scale,
+    etiquetaRect.width * scale,
+    etiquetaRect.height * scale,
   )
 
   // Tagline (raster ou SVG)
@@ -135,35 +143,37 @@ function parseSvgMarkup(text: string): { inner: string; viewBox: [number, number
   return { inner: root.innerHTML, viewBox: viewBox as [number, number, number, number] }
 }
 
-function getSvgSource(asset: ResolvedAsset) {
-  if (asset.svgText) return Promise.resolve(parseSvgMarkup(asset.svgText))
-  if (!svgSourceCache[asset.src]) {
-    svgSourceCache[asset.src] = fetch(asset.src)
+function getSvgSource(layer: EtiquetaLayer) {
+  if (layer.svgText) return Promise.resolve(parseSvgMarkup(layer.svgText))
+  if (!svgSourceCache[layer.src]) {
+    svgSourceCache[layer.src] = fetch(layer.src)
       .then((r) => r.text())
       .then(parseSvgMarkup)
   }
-  return svgSourceCache[asset.src]
+  return svgSourceCache[layer.src]
 }
 
-/** Adiciona um asset (etiqueta ou tagline) ao SVG de exportação, como vetor real quando é SVG, ou <image> raster caso contrário. */
-async function appendAsset(svg: SVGSVGElement, asset: ResolvedAsset, rect: Rect) {
-  if (asset.kind === 'svg') {
-    const { inner, viewBox } = await getSvgSource(asset)
+/** Adiciona uma camada (etiqueta ou tagline) ao SVG de exportação, como vetor real quando é SVG, ou <image> raster caso contrário. */
+async function appendLayer(svg: SVGSVGElement, layer: EtiquetaLayer, rect: Rect, blendMode?: 'multiply') {
+  if (layer.kind === 'svg') {
+    const { inner, viewBox } = await getSvgSource(layer)
     const [, , vbWidth, vbHeight] = viewBox
     const group = document.createElementNS(SVG_NS, 'g')
     const scaleX = rect.width / vbWidth
     const scaleY = rect.height / vbHeight
     group.setAttribute('transform', `translate(${rect.x}, ${rect.y}) scale(${scaleX}, ${scaleY})`)
+    if (blendMode) group.setAttribute('style', `mix-blend-mode:${blendMode}`)
     group.innerHTML = inner
     svg.appendChild(group)
   } else {
     const image = document.createElementNS(SVG_NS, 'image')
-    image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', asset.src)
-    image.setAttribute('href', asset.src)
+    image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', layer.src)
+    image.setAttribute('href', layer.src)
     image.setAttribute('x', String(rect.x))
     image.setAttribute('y', String(rect.y))
     image.setAttribute('width', String(rect.width))
     image.setAttribute('height', String(rect.height))
+    if (blendMode) image.setAttribute('style', `mix-blend-mode:${blendMode}`)
     svg.appendChild(image)
   }
 }
@@ -226,8 +236,10 @@ export async function exportFramePDF(frame: Frame): Promise<void> {
     svg.appendChild(placeholder)
   }
 
-  await appendAsset(svg, etiqueta, layout.etiqueta)
-  await appendAsset(svg, tagline, layout.tagline)
+  const etiquetaRect = getEtiquetaRenderRect(etiqueta, layout.etiqueta)
+  if (etiqueta.shadow) await appendLayer(svg, etiqueta.shadow, etiquetaRect, 'multiply')
+  await appendLayer(svg, etiqueta.front, etiquetaRect)
+  await appendLayer(svg, tagline, layout.tagline)
 
   document.body.appendChild(svg)
   try {
