@@ -64,6 +64,38 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
+/**
+ * Changes zoom while keeping the point currently at the center of `area`
+ * fixed, so the image grows/shrinks evenly in every direction instead of
+ * anchoring to its top-left corner (which would visibly push the crop
+ * toward the bottom-right as it zooms in).
+ */
+export function zoomPhoto(
+  area: Rect,
+  naturalWidth: number,
+  naturalHeight: number,
+  transform: PhotoTransform,
+  newScale: number,
+): PhotoTransform {
+  const base = coverScale(area, naturalWidth, naturalHeight)
+  const oldDispWidth = naturalWidth * base * transform.scale
+  const oldDispHeight = naturalHeight * base * transform.scale
+
+  const centerX = area.width / 2
+  const centerY = area.height / 2
+  const fx = oldDispWidth > 0 ? (centerX - transform.offsetX) / oldDispWidth : 0.5
+  const fy = oldDispHeight > 0 ? (centerY - transform.offsetY) / oldDispHeight : 0.5
+
+  const newDispWidth = naturalWidth * base * newScale
+  const newDispHeight = naturalHeight * base * newScale
+
+  return clampOffset(area, naturalWidth, naturalHeight, {
+    scale: newScale,
+    offsetX: centerX - fx * newDispWidth,
+    offsetY: centerY - fy * newDispHeight,
+  })
+}
+
 export const MAX_PHOTO_ZOOM = 3
 
 export interface LoadedPhoto {

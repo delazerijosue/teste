@@ -3,7 +3,7 @@ import { useStore } from '../state/store'
 import { computeLayout, resolveTaglineVariant, type TaglineVariant } from '../lib/layout'
 import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
 import { loadCustomAsset, isAcceptedAssetFile } from '../lib/customAssets'
-import { clampOffset, loadPhotoFile, MAX_PHOTO_ZOOM } from '../lib/photo'
+import { clampOffset, loadPhotoFile, zoomPhoto, MAX_PHOTO_ZOOM } from '../lib/photo'
 import { fromPx, toPx } from '../lib/units'
 import type { Frame } from '../types'
 import './OverridesEditor.css'
@@ -79,11 +79,8 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
 
   const onPhotoZoom = (value: number) => {
     if (!frame.photo) return
-    const clamped = clampOffset(layout.photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, {
-      ...frame.photo.transform,
-      scale: value,
-    })
-    updatePhotoTransform(frame.id, clamped)
+    const zoomed = zoomPhoto(layout.photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, frame.photo.transform, value)
+    updatePhotoTransform(frame.id, zoomed)
   }
 
   const onPhotoOffset = (axis: 'offsetX' | 'offsetY', displayValue: number) => {
