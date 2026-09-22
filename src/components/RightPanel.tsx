@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '../state/store'
-import { computeLayout, resolveTaglineVariant } from '../lib/layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
+import { computeLayout } from '../lib/layout'
 import { formatMeasurement } from '../lib/units'
-import { getFrameLabel } from '../lib/frame'
+import { getFrameLabel, resolveFrameAssets } from '../lib/frame'
 import { exportFramePDF, exportFramePNG } from '../lib/export'
 import './RightPanel.css'
 
@@ -12,9 +11,10 @@ export function RightPanel({ frameId }: { frameId: string }) {
   const [busy, setBusy] = useState<'pdf' | 'png' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const variant = frame ? resolveTaglineVariant(frame.overrides) : 'a'
-  const etiquetaAsset = frame ? resolveEtiquetaAsset(frame) : null
-  const taglineAsset = frame ? resolveTaglineAsset(frame, variant) : null
+  const resolved = frame ? resolveFrameAssets(frame) : null
+  const variant = resolved?.variant ?? 'a'
+  const etiquetaAsset = resolved?.etiquetaAsset ?? null
+  const taglineAsset = resolved?.taglineAsset ?? null
 
   const layout = useMemo(() => {
     if (!frame || !etiquetaAsset || !taglineAsset) return null

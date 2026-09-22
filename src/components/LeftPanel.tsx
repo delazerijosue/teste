@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type MouseEvent } from 'react'
 import { useStore } from '../state/store'
 import type { Unit } from '../lib/units'
 import { getFrameLabel } from '../lib/frame'
+import { exportFramePDF, exportFramePNG } from '../lib/export'
 import { OverridesEditor } from './OverridesEditor'
 import './LeftPanel.css'
 
@@ -12,9 +13,11 @@ export function LeftPanel() {
   const toggleDebug = useStore((s) => s.toggleDebug)
   const createFrame = useStore((s) => s.createFrame)
   const frames = useStore((s) => s.frames)
-  const selectedFrameId = useStore((s) => s.selectedFrameId)
+  const selectedFrameIds = useStore((s) => s.selectedFrameIds)
   const selectFrame = useStore((s) => s.selectFrame)
+  const toggleFrameSelection = useStore((s) => s.toggleFrameSelection)
   const removeFrame = useStore((s) => s.removeFrame)
+  const removeFrames = useStore((s) => s.removeFrames)
   const duplicateFrame = useStore((s) => s.duplicateFrame)
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
@@ -24,8 +27,9 @@ export function LeftPanel() {
   const [width, setWidth] = useState('1080')
   const [height, setHeight] = useState('1350')
   const [unit, setUnit] = useState<Unit>('px')
+  const [bulkBusy, setBulkBusy] = useState<'pdf' | 'png' | null>(null)
 
-  const selectedFrame = frames.find((f) => f.id === selectedFrameId) ?? null
+  const selectedFrame = selectedFrameIds.length === 1 ? frames.find((f) => f.id === selectedFrameIds[0]) ?? null : null
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -33,6 +37,24 @@ export function LeftPanel() {
     const h = Number(height)
     if (!w || !h || w <= 0 || h <= 0) return
     createFrame({ width: w, height: h, unit })
+  }
+
+  const onFrameListClick = (e: MouseEvent, id: string) => {
+    if (e.shiftKey || e.metaKey || e.ctrlKey) toggleFrameSelection(id)
+    else selectFrame(id)
+  }
+
+  const runBulkExport = async (kind: 'pdf' | 'png') => {
+    setBulkBusy(kind)
+    try {
+      const selected = frames.filter((f) => selectedFrameIds.includes(f.id))
+      for (const f of selected) {
+        if (kind === 'pdf') await exportFramePDF(f)
+        else await exportFramePNG(f)
+      }
+    } finally {
+      setBulkBusy(null)
+    }
   }
 
   if (collapsed) {
@@ -111,8 +133,8 @@ export function LeftPanel() {
             {frames.map((f) => (
               <li
                 key={f.id}
-                className={f.id === selectedFrameId ? 'active' : ''}
-                onClick={() => selectFrame(f.id)}
+                className={selectedFrameIds.includes(f.id) ? 'active' : ''}
+                onClick={(e) => onFrameListClick(e, f.id)}
               >
                 <span className="frame-list__name">{getFrameLabel(f)}</span>
                 <span className="frame-list__actions">
@@ -142,6 +164,33 @@ export function LeftPanel() {
               </li>
             ))}
           </ul>
+
+          {selectedFrameIds.length > 1 && (
+            <div className="selection-toolbar">
+              <span className="selection-toolbar__count">{selectedFrameIds.length} selecionados</span>
+              <div className="selection-toolbar__actions">
+                <button
+                  className="secondary"
+                  type="button"
+                  disabled={bulkBusy !== null}
+                  onClick={() => runBulkExport('png')}
+                >
+                  {bulkBusy === 'png' ? 'Exportando…' : 'Exportar PNG'}
+                </button>
+                <button
+                  className="secondary"
+                  type="button"
+                  disabled={bulkBusy !== null}
+                  onClick={() => runBulkExport('pdf')}
+                >
+                  {bulkBusy === 'pdf' ? 'Exportando…' : 'Exportar PDF'}
+                </button>
+                <button className="secondary" type="button" onClick={() => removeFrames(selectedFrameIds)}>
+                  Remover
+                </button>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

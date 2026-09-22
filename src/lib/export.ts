@@ -9,11 +9,12 @@
  */
 import { jsPDF } from 'jspdf'
 import 'svg2pdf.js'
-import { computeLayout, resolveTaglineVariant } from './layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset, getEtiquetaRenderRect, type EtiquetaLayer } from './assets'
+import { computeLayout } from './layout'
+import { getEtiquetaRenderRect, type EtiquetaLayer } from './assets'
 import { coverScale } from './photo'
 import { pxToMm, pxToExportPixels } from './units'
 import { assetUrl } from './url'
+import { resolveFrameAssets } from './frame'
 import type { Frame } from '../types'
 import type { Rect } from './layout'
 
@@ -70,9 +71,7 @@ function photoDisplayRect(frame: Frame, photoArea: Rect) {
 }
 
 function frameLayout(frame: Frame) {
-  const variant = resolveTaglineVariant(frame.overrides)
-  const etiqueta = resolveEtiquetaAsset(frame)
-  const tagline = resolveTaglineAsset(frame, variant)
+  const { etiquetaAsset: etiqueta, taglineAsset: tagline } = resolveFrameAssets(frame)
   const layout = computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
   return { layout, etiqueta, tagline }
 }

@@ -1,25 +1,28 @@
 import { useCallback, useMemo, useRef, type PointerEvent } from 'react'
 import { useStore } from '../state/store'
-import { computeLayout, resolveTaglineVariant } from '../lib/layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset, getEtiquetaRenderRect } from '../lib/assets'
+import { computeLayout } from '../lib/layout'
+import { getEtiquetaRenderRect, type ResolvedEtiqueta } from '../lib/assets'
 import { fromPx } from '../lib/units'
-import { getFrameLabel } from '../lib/frame'
+import { getFrameLabel, resolveFrameAssets } from '../lib/frame'
 import { PhotoLayer } from './PhotoLayer'
 import type { Frame } from '../types'
 import './FrameView.css'
 
+function hasSelectModifier(e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }): boolean {
+  return e.shiftKey || e.metaKey || e.ctrlKey
+}
+
 export function FrameView({ frame }: { frame: Frame }) {
-  const selectedFrameId = useStore((s) => s.selectedFrameId)
+  const selectedFrameIds = useStore((s) => s.selectedFrameIds)
   const debugMode = useStore((s) => s.debugMode)
   const selectFrame = useStore((s) => s.selectFrame)
+  const toggleFrameSelection = useStore((s) => s.toggleFrameSelection)
   const moveFrame = useStore((s) => s.moveFrame)
   const snapshot = useStore((s) => s.snapshot)
   const zoom = useStore((s) => s.canvasView.zoom)
 
-  const isSelected = selectedFrameId === frame.id
-  const variant = resolveTaglineVariant(frame.overrides)
-  const etiquetaAsset = resolveEtiquetaAsset(frame)
-  const taglineAsset = resolveTaglineAsset(frame, variant)
+  const isSelected = selectedFrameIds.includes(frame.id)
+  const { etiquetaAsset, taglineAsset } = resolveFrameAssets(frame)
 
   const layout = useMemo(
     () => computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio),
@@ -28,15 +31,27 @@ export function FrameView({ frame }: { frame: Frame }) {
 
   const dragState = useRef<{ startX: number; startY: number; frameX: number; frameY: number } | null>(null)
 
+  const onPhotoSelect = useCallback(
+    (modifier: boolean) => {
+      if (modifier) toggleFrameSelection(frame.id)
+      else selectFrame(frame.id)
+    },
+    [frame.id, selectFrame, toggleFrameSelection],
+  )
+
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return
+      if (hasSelectModifier(e)) {
+        toggleFrameSelection(frame.id)
+        return
+      }
       selectFrame(frame.id)
       snapshot()
       dragState.current = { startX: e.clientX, startY: e.clientY, frameX: frame.canvasX, frameY: frame.canvasY }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [frame.id, frame.canvasX, frame.canvasY, selectFrame, snapshot],
+    [frame.id, frame.canvasX, frame.canvasY, selectFrame, toggleFrameSelection, snapshot],
   )
 
   const onPointerMove = useCallback(
@@ -53,14 +68,6 @@ export function FrameView({ frame }: { frame: Frame }) {
     dragState.current = null
   }, [])
 
-  const onClickSelect = useCallback(
-    (e: React.MouseEvent) => {
-      e.stopPropagation()
-      selectFrame(frame.id)
-    },
-    [frame.id, selectFrame],
-  )
-
   return (
     <div
       className={`frame ${isSelected ? 'frame--selected' : ''}`}
@@ -69,9 +76,8 @@ export function FrameView({ frame }: { frame: Frame }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
-      onClick={onClickSelect}
     >
-      <PhotoLayer frame={frame} photoArea={layout.photoArea} />
+      <PhotoLayer frame={frame} photoArea={layout.photoArea} onSelect={onPhotoSelect} />
 
       <EtiquetaLayers asset={etiquetaAsset} contentBox={layout.etiqueta} />
 
@@ -99,7 +105,7 @@ function EtiquetaLayers({
   asset,
   contentBox,
 }: {
-  asset: ReturnType<typeof resolveEtiquetaAsset>
+  asset: ResolvedEtiqueta
   contentBox: ReturnType<typeof computeLayout>['etiqueta']
 }) {
   const rect = getEtiquetaRenderRect(asset, contentBox)

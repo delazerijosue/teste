@@ -5,7 +5,15 @@ import type { Rect } from '../lib/layout'
 import type { Frame } from '../types'
 import './PhotoLayer.css'
 
-export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect }) {
+export function PhotoLayer({
+  frame,
+  photoArea,
+  onSelect,
+}: {
+  frame: Frame
+  photoArea: Rect
+  onSelect: (modifier: boolean) => void
+}) {
   const setPhoto = useStore((s) => s.setPhoto)
   const updatePhotoTransform = useStore((s) => s.updatePhotoTransform)
   const snapshot = useStore((s) => s.snapshot)
@@ -29,11 +37,14 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
     (e: PointerEvent<HTMLDivElement>) => {
       if (!frame.photo) return
       e.stopPropagation()
+      const modifier = e.shiftKey || e.metaKey || e.ctrlKey
+      onSelect(modifier)
+      if (modifier) return
       snapshot()
       dragState.current = { lastX: e.clientX, lastY: e.clientY }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [frame.photo, snapshot],
+    [frame.photo, onSelect, snapshot],
   )
 
   const onPointerMove = useCallback(

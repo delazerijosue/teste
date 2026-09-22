@@ -31,11 +31,12 @@ export interface FrameOverrides {
 }
 
 export function defaultOverrides(): FrameOverrides {
-  return { taglineVariant: 'a' }
+  return {}
 }
 
-export function resolveTaglineVariant(overrides: FrameOverrides): TaglineVariant {
-  return overrides.taglineVariant ?? 'a'
+/** Default tagline variant: "duas linhas" (B) once the etiqueta larga kicks in, unless the user overrode it. */
+export function resolveTaglineVariant(overrides: FrameOverrides, isWide: boolean): TaglineVariant {
+  return overrides.taglineVariant ?? (isWide ? 'b' : 'a')
 }
 
 export interface LayoutResult {
@@ -47,6 +48,7 @@ export interface LayoutResult {
 }
 
 const ETIQUETA_DEFAULT_HEIGHT_RATIO = 0.2 // 20% da altura do frame
+const ETIQUETA_WIDE_HEIGHT_RATIO = 1 / 7 // altura da etiqueta quando ela vai para a parte inferior (modo largo)
 const ETIQUETA_GAP_RATIO = 0.07 // 7% da largura do frame
 const MARGIN_TOPSIDES_RATIO = 0.02 // 2% do maior lado
 const MARGIN_BOTTOM_RATIO = 1 / 7
@@ -57,6 +59,23 @@ const TAGLINE_WIDTH_RATIO_HORIZONTAL = 1 / 3
 
 export function getOrientation(widthPx: number, heightPx: number): Orientation {
   return heightPx > widthPx ? 'vertical' : 'horizontal'
+}
+
+/**
+ * Whether the etiqueta larga exception (Seção 4/5) applies — decided using the
+ * height it would have at its normal default ratio, before the wide-mode
+ * height override (below) is applied, so the two don't depend on each other.
+ */
+export function computeEtiquetaWideMode(
+  widthPx: number,
+  heightPx: number,
+  overrides: FrameOverrides,
+  etiquetaAspectRatio: number,
+): boolean {
+  const orientation = getOrientation(widthPx, heightPx)
+  const candidateHeight = overrides.etiquetaHeight ?? ETIQUETA_DEFAULT_HEIGHT_RATIO * heightPx
+  const candidateWidth = candidateHeight * etiquetaAspectRatio
+  return orientation === 'vertical' && candidateWidth > widthPx * ETIQUETA_WIDE_THRESHOLD_RATIO
 }
 
 /**
@@ -75,11 +94,12 @@ export function computeLayout(
 
   const marginTopSides = overrides.marginTopSides ?? MARGIN_TOPSIDES_RATIO * maiorLado
 
-  const etiquetaHeight = overrides.etiquetaHeight ?? ETIQUETA_DEFAULT_HEIGHT_RATIO * heightPx
-  const etiquetaWidth = etiquetaHeight * etiquetaAspectRatio
-
   // Exceção — etiqueta larga: só se aplica ao frame vertical (Seção 4/5).
-  const isWide = orientation === 'vertical' && etiquetaWidth > widthPx * ETIQUETA_WIDE_THRESHOLD_RATIO
+  const isWide = computeEtiquetaWideMode(widthPx, heightPx, overrides, etiquetaAspectRatio)
+
+  const etiquetaHeight =
+    overrides.etiquetaHeight ?? (isWide ? ETIQUETA_WIDE_HEIGHT_RATIO : ETIQUETA_DEFAULT_HEIGHT_RATIO) * heightPx
+  const etiquetaWidth = etiquetaHeight * etiquetaAspectRatio
 
   const marginBottom =
     overrides.marginBottom ?? (isWide ? MARGIN_BOTTOM_WIDE_RATIO : MARGIN_BOTTOM_RATIO) * heightPx

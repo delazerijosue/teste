@@ -11,27 +11,50 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export default function App() {
-  const selectedFrameId = useStore((s) => s.selectedFrameId)
+  const selectedFrameIds = useStore((s) => s.selectedFrameIds)
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
+  const removeFrames = useStore((s) => s.removeFrames)
+  const copySelection = useStore((s) => s.copySelection)
+  const pasteClipboard = useStore((s) => s.pasteClipboard)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return
       if (isEditableTarget(e.target)) return
-      e.preventDefault()
-      if (e.shiftKey) redo()
-      else undo()
+      const mod = e.metaKey || e.ctrlKey
+
+      if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'c') {
+        if (selectedFrameIds.length === 0) return
+        e.preventDefault()
+        copySelection()
+        return
+      }
+      if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        pasteClipboard()
+        return
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedFrameIds.length === 0) return
+        e.preventDefault()
+        removeFrames(selectedFrameIds)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [undo, redo])
+  }, [selectedFrameIds, undo, redo, copySelection, pasteClipboard, removeFrames])
 
   return (
     <div className="app-shell">
       <LeftPanel />
       <Canvas />
-      {selectedFrameId && <RightPanel frameId={selectedFrameId} />}
+      {selectedFrameIds.length === 1 && <RightPanel frameId={selectedFrameIds[0]} />}
     </div>
   )
 }

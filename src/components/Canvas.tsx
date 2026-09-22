@@ -42,7 +42,7 @@ export function Canvas() {
     (e: PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return
       dragState.current = { startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y }
-      selectFrame(null)
+      if (!(e.shiftKey || e.metaKey || e.ctrlKey)) selectFrame(null)
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
     [view, selectFrame],

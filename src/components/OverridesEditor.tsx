@@ -1,10 +1,10 @@
 import { useMemo, useRef, type ChangeEvent } from 'react'
 import { useStore } from '../state/store'
-import { computeLayout, resolveTaglineVariant, type TaglineVariant } from '../lib/layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
+import { computeLayout, type TaglineVariant } from '../lib/layout'
 import { loadCustomAsset, isAcceptedAssetFile } from '../lib/customAssets'
 import { clampPan, loadPhotoFile, zoomPhoto, MAX_PHOTO_ZOOM } from '../lib/photo'
 import { fromPx, toPx } from '../lib/units'
+import { resolveFrameAssets } from '../lib/frame'
 import type { Frame } from '../types'
 import './OverridesEditor.css'
 
@@ -22,9 +22,7 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
   const taglineInputRef = useRef<HTMLInputElement>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
 
-  const variant = resolveTaglineVariant(frame.overrides)
-  const etiquetaAsset = resolveEtiquetaAsset(frame)
-  const taglineAsset = resolveTaglineAsset(frame, variant)
+  const { etiquetaAsset, taglineAsset, variant } = resolveFrameAssets(frame)
   const layout = useMemo(
     () => computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio),
     [frame.widthPx, frame.heightPx, frame.overrides, etiquetaAsset.aspectRatio, taglineAsset.aspectRatio],

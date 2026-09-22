@@ -1,11 +1,28 @@
 import { create } from 'zustand'
 import { nanoid } from 'nanoid'
-import { computeLayout, defaultOverrides, resolveTaglineVariant, type FrameOverrides } from '../lib/layout'
-import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
+import { computeLayout, defaultOverrides, type FrameOverrides } from '../lib/layout'
+import { resolveFrameAssets } from '../lib/frame'
 import { preservePhotoFraction } from '../lib/photo'
 import { toPx, type Unit } from '../lib/units'
 import type { CustomAsset } from '../lib/customAssets'
 import type { Frame, PhotoState } from '../types'
+
+function deepCloneFrame(source: Frame, id: string): Frame {
+  return {
+    ...source,
+    id,
+    overrides: { ...source.overrides, etiquetaPos: source.overrides.etiquetaPos ? { ...source.overrides.etiquetaPos } : undefined },
+    photo: source.photo ? { ...source.photo, transform: { ...source.photo.transform } } : null,
+    customEtiqueta: source.customEtiqueta ? { ...source.customEtiqueta } : null,
+    customTagline: source.customTagline ? { ...source.customTagline } : null,
+  }
+}
+
+/** Clone offset by a fixed amount — used when the new frame should appear visibly apart from its source (duplicate/paste). */
+function cloneFrameOffset(source: Frame, id: string): Frame {
+  const cloned = deepCloneFrame(source, id)
+  return { ...cloned, canvasX: source.canvasX + 48, canvasY: source.canvasY + 48 }
+}
 
 interface CanvasView {
   x: number
@@ -15,14 +32,16 @@ interface CanvasView {
 
 interface HistoryEntry {
   frames: Frame[]
-  selectedFrameId: string | null
+  selectedFrameIds: string[]
 }
 
 const MAX_HISTORY = 50
 
 interface AppState {
   frames: Frame[]
-  selectedFrameId: string | null
+  selectedFrameIds: string[]
+  /** In-app clipboard (Ctrl/Cmd+C e Ctrl/Cmd+V) — não é o clipboard do sistema. */
+  clipboard: Frame[]
   debugMode: boolean
   leftPanelCollapsed: boolean
   canvasView: CanvasView
@@ -37,7 +56,11 @@ interface AppState {
   createFrame: (input: { width: number; height: number; unit: Unit }) => string
   duplicateFrame: (id: string) => string | null
   selectFrame: (id: string | null) => void
+  toggleFrameSelection: (id: string) => void
   removeFrame: (id: string) => void
+  removeFrames: (ids: string[]) => void
+  copySelection: () => void
+  pasteClipboard: () => void
   moveFrame: (id: string, canvasX: number, canvasY: number) => void
   resizeFrame: (id: string, width: number, height: number) => void
   updateOverrides: (id: string, patch: Partial<FrameOverrides>) => void
@@ -61,7 +84,8 @@ function nextFramePosition(frames: Frame[]): { x: number; y: number } {
 
 export const useStore = create<AppState>((set, get) => ({
   frames: [],
-  selectedFrameId: null,
+  selectedFrameIds: [],
+  clipboard: [],
   debugMode: false,
   leftPanelCollapsed: false,
   canvasView: { x: 0, y: 0, zoom: 1 },
@@ -69,33 +93,33 @@ export const useStore = create<AppState>((set, get) => ({
   future: [],
 
   snapshot: () => {
-    const { frames, selectedFrameId, past } = get()
-    const entry: HistoryEntry = { frames, selectedFrameId }
+    const { frames, selectedFrameIds, past } = get()
+    const entry: HistoryEntry = { frames, selectedFrameIds }
     const nextPast = [...past, entry].slice(-MAX_HISTORY)
     set({ past: nextPast, future: [] })
   },
 
   undo: () => {
-    const { past, future, frames, selectedFrameId } = get()
+    const { past, future, frames, selectedFrameIds } = get()
     if (past.length === 0) return
     const previous = past[past.length - 1]
-    const current: HistoryEntry = { frames, selectedFrameId }
+    const current: HistoryEntry = { frames, selectedFrameIds }
     set({
       frames: previous.frames,
-      selectedFrameId: previous.selectedFrameId,
+      selectedFrameIds: previous.selectedFrameIds,
       past: past.slice(0, -1),
       future: [...future, current],
     })
   },
 
   redo: () => {
-    const { past, future, frames, selectedFrameId } = get()
+    const { past, future, frames, selectedFrameIds } = get()
     if (future.length === 0) return
     const next = future[future.length - 1]
-    const current: HistoryEntry = { frames, selectedFrameId }
+    const current: HistoryEntry = { frames, selectedFrameIds }
     set({
       frames: next.frames,
-      selectedFrameId: next.selectedFrameId,
+      selectedFrameIds: next.selectedFrameIds,
       past: [...past, current],
       future: future.slice(0, -1),
     })
@@ -122,7 +146,7 @@ export const useStore = create<AppState>((set, get) => ({
       customEtiqueta: null,
       customTagline: null,
     }
-    set((s) => ({ frames: [...s.frames, frame], selectedFrameId: id }))
+    set((s) => ({ frames: [...s.frames, frame], selectedFrameIds: [id] }))
     return id
   },
 
@@ -131,28 +155,54 @@ export const useStore = create<AppState>((set, get) => ({
     const source = get().frames.find((f) => f.id === id)
     if (!source) return null
     const newId = nanoid()
-    const clone: Frame = {
-      ...source,
-      id: newId,
-      name: `${source.name} cópia`,
-      canvasX: source.canvasX + 48,
-      canvasY: source.canvasY + 48,
-      overrides: { ...source.overrides, etiquetaPos: source.overrides.etiquetaPos ? { ...source.overrides.etiquetaPos } : undefined },
-      photo: source.photo ? { ...source.photo, transform: { ...source.photo.transform } } : null,
-      customEtiqueta: source.customEtiqueta ? { ...source.customEtiqueta } : null,
-      customTagline: source.customTagline ? { ...source.customTagline } : null,
-    }
-    set((s) => ({ frames: [...s.frames, clone], selectedFrameId: newId }))
+    const clone: Frame = { ...cloneFrameOffset(source, newId), name: `${source.name} cópia` }
+    set((s) => ({ frames: [...s.frames, clone], selectedFrameIds: [newId] }))
     return newId
   },
 
-  selectFrame: (id) => set({ selectedFrameId: id }),
+  selectFrame: (id) => set({ selectedFrameIds: id ? [id] : [] }),
+
+  toggleFrameSelection: (id) =>
+    set((s) => ({
+      selectedFrameIds: s.selectedFrameIds.includes(id)
+        ? s.selectedFrameIds.filter((x) => x !== id)
+        : [...s.selectedFrameIds, id],
+    })),
+
+  removeFrames: (ids) => {
+    if (ids.length === 0) return
+    get().snapshot()
+    const idSet = new Set(ids)
+    set((s) => ({
+      frames: s.frames.filter((f) => !idSet.has(f.id)),
+      selectedFrameIds: s.selectedFrameIds.filter((x) => !idSet.has(x)),
+    }))
+  },
+
+  copySelection: () => {
+    const { frames, selectedFrameIds } = get()
+    const selected = frames.filter((f) => selectedFrameIds.includes(f.id))
+    if (selected.length === 0) return
+    set({ clipboard: selected.map((f) => deepCloneFrame(f, f.id)) })
+  },
+
+  pasteClipboard: () => {
+    const { clipboard } = get()
+    if (clipboard.length === 0) return
+    get().snapshot()
+    const clones = clipboard.map((f) => cloneFrameOffset(f, nanoid()))
+    set((s) => ({
+      frames: [...s.frames, ...clones],
+      selectedFrameIds: clones.map((c) => c.id),
+      clipboard: clones,
+    }))
+  },
 
   removeFrame: (id) => {
     get().snapshot()
     set((s) => ({
       frames: s.frames.filter((f) => f.id !== id),
-      selectedFrameId: s.selectedFrameId === id ? null : s.selectedFrameId,
+      selectedFrameIds: s.selectedFrameIds.filter((x) => x !== id),
     }))
   },
 
@@ -172,9 +222,7 @@ export const useStore = create<AppState>((set, get) => ({
 
         if (!resized.photo) return resized
 
-        const variant = resolveTaglineVariant(f.overrides)
-        const etiqueta = resolveEtiquetaAsset(f)
-        const tagline = resolveTaglineAsset(f, variant)
+        const { etiquetaAsset: etiqueta, taglineAsset: tagline } = resolveFrameAssets(f)
         const oldPhotoArea = computeLayout(f.widthPx, f.heightPx, f.overrides, etiqueta.aspectRatio, tagline.aspectRatio).photoArea
         const newPhotoArea = computeLayout(widthPx, heightPx, resized.overrides, etiqueta.aspectRatio, tagline.aspectRatio).photoArea
         const transform = preservePhotoFraction(oldPhotoArea, newPhotoArea, resized.photo.transform)
