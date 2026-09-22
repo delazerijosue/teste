@@ -5,12 +5,15 @@
   overflow: hidden;
   background-color: var(--color-canvas-bg);
   background-image: radial-gradient(circle, #24343d 1px, transparent 1.4px);
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 }
 
-.canvas-viewport:active {
-  cursor: grabbing;
+.canvas-marquee {
+  position: absolute;
+  border: 1px solid var(--color-accent);
+  background: rgba(0, 103, 179, 0.12);
+  pointer-events: none;
 }
 
 .canvas-world {

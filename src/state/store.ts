@@ -58,6 +58,7 @@ interface AppState {
   createFrame: (input: { width: number; height: number; unit: Unit }) => string
   duplicateFrame: (id: string) => string | null
   selectFrame: (id: string | null) => void
+  selectFrames: (ids: string[]) => void
   toggleFrameSelection: (id: string) => void
   removeFrame: (id: string) => void
   removeFrames: (ids: string[]) => void
@@ -68,6 +69,7 @@ interface AppState {
   updateOverrides: (id: string, patch: Partial<FrameOverrides>) => void
   clearOverride: (id: string, key: keyof FrameOverrides) => void
   setPhoto: (id: string, photo: PhotoState | null) => void
+  setPhotoForFrames: (ids: string[], photo: PhotoState) => void
   updatePhotoTransform: (id: string, transform: PhotoState['transform']) => void
   setCustomEtiqueta: (id: string, asset: CustomAsset | null) => void
   setCustomTagline: (id: string, asset: CustomAsset | null) => void
@@ -166,6 +168,8 @@ export const useStore = create<AppState>((set, get) => ({
 
   selectFrame: (id) => set({ selectedFrameIds: id ? [id] : [] }),
 
+  selectFrames: (ids) => set({ selectedFrameIds: ids }),
+
   toggleFrameSelection: (id) =>
     set((s) => ({
       selectedFrameIds: s.selectedFrameIds.includes(id)
@@ -260,6 +264,15 @@ export const useStore = create<AppState>((set, get) => ({
     get().snapshot()
     set((s) => ({
       frames: s.frames.map((f) => (f.id === id ? { ...f, photo } : f)),
+    }))
+  },
+
+  setPhotoForFrames: (ids, photo) => {
+    if (ids.length === 0) return
+    get().snapshot()
+    const idSet = new Set(ids)
+    set((s) => ({
+      frames: s.frames.map((f) => (idSet.has(f.id) ? { ...f, photo: { ...photo, transform: { ...photo.transform } } } : f)),
     }))
   },
 

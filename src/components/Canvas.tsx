@@ -1,13 +1,21 @@
-import { useRef, useCallback, type PointerEvent, type WheelEvent } from 'react'
+import { useRef, useState, useCallback, type PointerEvent, type WheelEvent } from 'react'
 import { useStore } from '../state/store'
 import { FrameView } from './FrameView'
 import './Canvas.css'
 
 const MIN_ZOOM = 0.1
 const MAX_ZOOM = 4
+const MARQUEE_THRESHOLD = 4
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+interface ScreenRect {
+  x: number
+  y: number
+  width: number
+  height: number
 }
 
 export function Canvas() {
@@ -15,9 +23,12 @@ export function Canvas() {
   const view = useStore((s) => s.canvasView)
   const setCanvasView = useStore((s) => s.setCanvasView)
   const selectFrame = useStore((s) => s.selectFrame)
+  const selectFrames = useStore((s) => s.selectFrames)
+  const selectedFrameIds = useStore((s) => s.selectedFrameIds)
 
   const viewportRef = useRef<HTMLDivElement>(null)
-  const dragState = useRef<{ startX: number; startY: number; viewX: number; viewY: number } | null>(null)
+  const marqueeState = useRef<{ startClientX: number; startClientY: number; additive: boolean } | null>(null)
+  const [marqueeRect, setMarqueeRect] = useState<ScreenRect | null>(null)
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
@@ -41,26 +52,67 @@ export function Canvas() {
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       if (e.target !== e.currentTarget) return
-      dragState.current = { startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y }
-      if (!(e.shiftKey || e.metaKey || e.ctrlKey)) selectFrame(null)
+      const additive = e.shiftKey || e.metaKey || e.ctrlKey
+      marqueeState.current = { startClientX: e.clientX, startClientY: e.clientY, additive }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [view, selectFrame],
+    [],
   )
 
-  const onPointerMove = useCallback(
-    (e: PointerEvent<HTMLDivElement>) => {
-      if (!dragState.current) return
-      const dx = e.clientX - dragState.current.startX
-      const dy = e.clientY - dragState.current.startY
-      setCanvasView({ x: dragState.current.viewX + dx, y: dragState.current.viewY + dy })
-    },
-    [setCanvasView],
-  )
-
-  const onPointerUp = useCallback(() => {
-    dragState.current = null
+  const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (!marqueeState.current) return
+    const rect = viewportRef.current!.getBoundingClientRect()
+    const { startClientX, startClientY } = marqueeState.current
+    const x0 = startClientX - rect.left
+    const y0 = startClientY - rect.top
+    const x1 = e.clientX - rect.left
+    const y1 = e.clientY - rect.top
+    setMarqueeRect({
+      x: Math.min(x0, x1),
+      y: Math.min(y0, y1),
+      width: Math.abs(x1 - x0),
+      height: Math.abs(y1 - y0),
+    })
   }, [])
+
+  const onPointerUp = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const drag = marqueeState.current
+      marqueeState.current = null
+      setMarqueeRect(null)
+      if (!drag) return
+
+      const dx = Math.abs(e.clientX - drag.startClientX)
+      const dy = Math.abs(e.clientY - drag.startClientY)
+      if (dx < MARQUEE_THRESHOLD && dy < MARQUEE_THRESHOLD) {
+        if (!drag.additive) selectFrame(null)
+        return
+      }
+
+      const rect = viewportRef.current!.getBoundingClientRect()
+      const toWorld = (clientX: number, clientY: number) => ({
+        x: (clientX - rect.left - view.x) / view.zoom,
+        y: (clientY - rect.top - view.y) / view.zoom,
+      })
+      const p0 = toWorld(drag.startClientX, drag.startClientY)
+      const p1 = toWorld(e.clientX, e.clientY)
+      const minX = Math.min(p0.x, p1.x)
+      const maxX = Math.max(p0.x, p1.x)
+      const minY = Math.min(p0.y, p1.y)
+      const maxY = Math.max(p0.y, p1.y)
+
+      const hitIds = frames
+        .filter((f) => f.canvasX < maxX && f.canvasX + f.widthPx > minX && f.canvasY < maxY && f.canvasY + f.heightPx > minY)
+        .map((f) => f.id)
+
+      if (drag.additive) {
+        selectFrames([...new Set([...selectedFrameIds, ...hitIds])])
+      } else {
+        selectFrames(hitIds)
+      }
+    },
+    [frames, view, selectedFrameIds, selectFrame, selectFrames],
+  )
 
   const zoomBy = (factor: number) => {
     const newZoom = clamp(view.zoom * factor, MIN_ZOOM, MAX_ZOOM)
@@ -93,6 +145,13 @@ export function Canvas() {
           <FrameView key={frame.id} frame={frame} />
         ))}
       </div>
+
+      {marqueeRect && (
+        <div
+          className="canvas-marquee"
+          style={{ left: marqueeRect.x, top: marqueeRect.y, width: marqueeRect.width, height: marqueeRect.height }}
+        />
+      )}
 
       {frames.length === 0 && (
         <div className="canvas-empty-hint">

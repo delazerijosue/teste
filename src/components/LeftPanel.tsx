@@ -1,7 +1,8 @@
-import { useState, type FormEvent, type MouseEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent, type MouseEvent } from 'react'
 import { useStore } from '../state/store'
 import type { Unit } from '../lib/units'
 import { getFrameLabel } from '../lib/frame'
+import { loadPhotoFile } from '../lib/photo'
 import { exportFramePDF, exportFramePNG, exportFrameGuidesPDF } from '../lib/export'
 import { OverridesEditor } from './OverridesEditor'
 import './LeftPanel.css'
@@ -21,6 +22,8 @@ export function LeftPanel() {
   const removeFrame = useStore((s) => s.removeFrame)
   const removeFrames = useStore((s) => s.removeFrames)
   const duplicateFrame = useStore((s) => s.duplicateFrame)
+  const setPhoto = useStore((s) => s.setPhoto)
+  const setPhotoForFrames = useStore((s) => s.setPhotoForFrames)
   const undo = useStore((s) => s.undo)
   const redo = useStore((s) => s.redo)
   const canUndo = useStore((s) => s.past.length > 0)
@@ -30,8 +33,11 @@ export function LeftPanel() {
   const [height, setHeight] = useState('1350')
   const [unit, setUnit] = useState<Unit>('px')
   const [bulkBusy, setBulkBusy] = useState<'pdf' | 'png' | null>(null)
+  const photoInputRef = useRef<HTMLInputElement>(null)
+  const photoTargetRef = useRef<'bulk' | string | null>(null)
 
   const selectedFrame = selectedFrameIds.length === 1 ? frames.find((f) => f.id === selectedFrameIds[0]) ?? null : null
+  const selectedFrames = frames.filter((f) => selectedFrameIds.includes(f.id))
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -49,8 +55,7 @@ export function LeftPanel() {
   const runBulkExport = async (kind: 'pdf' | 'png') => {
     setBulkBusy(kind)
     try {
-      const selected = frames.filter((f) => selectedFrameIds.includes(f.id))
-      for (const f of selected) {
+      for (const f of selectedFrames) {
         if (guidesMode) await exportFrameGuidesPDF(f)
         else if (kind === 'pdf') await exportFramePDF(f)
         else await exportFramePNG(f)
@@ -58,6 +63,22 @@ export function LeftPanel() {
     } finally {
       setBulkBusy(null)
     }
+  }
+
+  const openPhotoDialog = (target: 'bulk' | string) => {
+    photoTargetRef.current = target
+    photoInputRef.current?.click()
+  }
+
+  const onPhotoFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    const target = photoTargetRef.current
+    photoTargetRef.current = null
+    if (!file || !target || !/^image\/(png|jpe?g)$/.test(file.type)) return
+    const photo = await loadPhotoFile(file)
+    if (target === 'bulk') setPhotoForFrames(selectedFrameIds, photo)
+    else setPhoto(target, photo)
   }
 
   if (collapsed) {
@@ -193,34 +214,69 @@ export function LeftPanel() {
             ))}
           </ul>
 
-          {selectedFrameIds.length > 1 && (
-            <div className="selection-toolbar">
-              <span className="selection-toolbar__count">{selectedFrameIds.length} selecionados</span>
-              <div className="selection-toolbar__actions">
-                {!guidesMode && (
-                  <button
-                    className="secondary"
-                    type="button"
-                    disabled={bulkBusy !== null}
-                    onClick={() => runBulkExport('png')}
-                  >
-                    {bulkBusy === 'png' ? 'Exportando…' : 'Exportar PNG'}
-                  </button>
-                )}
+        </section>
+      )}
+
+      {selectedFrames.length > 0 && (
+        <section className="left-panel__section left-panel__selection">
+          <h2>Seleção ({selectedFrames.length})</h2>
+
+          <ul className="selection-photo-grid">
+            {selectedFrames.map((f) => (
+              <li key={f.id}>
+                <div
+                  className="selection-photo-grid__thumb"
+                  style={f.photo ? { backgroundImage: `url(${f.photo.src})` } : undefined}
+                >
+                  {!f.photo && <span>Sem foto</span>}
+                </div>
+                <span className="selection-photo-grid__name">{f.name}</span>
+                <button className="secondary" type="button" onClick={() => openPhotoDialog(f.id)}>
+                  Trocar foto
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {selectedFrames.length > 1 && (
+            <button className="secondary" type="button" onClick={() => openPhotoDialog('bulk')}>
+              Trocar foto de todos os selecionados
+            </button>
+          )}
+
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/png,image/jpeg"
+            className="hidden-input"
+            onChange={onPhotoFileSelected}
+          />
+
+          <div className="selection-toolbar">
+            <div className="selection-toolbar__actions">
+              {!guidesMode && (
                 <button
                   className="secondary"
                   type="button"
                   disabled={bulkBusy !== null}
-                  onClick={() => runBulkExport('pdf')}
+                  onClick={() => runBulkExport('png')}
                 >
-                  {bulkBusy === 'pdf' ? 'Exportando…' : guidesMode ? 'Exportar PDF (guias)' : 'Exportar PDF'}
+                  {bulkBusy === 'png' ? 'Exportando…' : 'Exportar PNG'}
                 </button>
-                <button className="secondary" type="button" onClick={() => removeFrames(selectedFrameIds)}>
-                  Remover
-                </button>
-              </div>
+              )}
+              <button
+                className="secondary"
+                type="button"
+                disabled={bulkBusy !== null}
+                onClick={() => runBulkExport('pdf')}
+              >
+                {bulkBusy === 'pdf' ? 'Exportando…' : guidesMode ? 'Exportar PDF (guias)' : 'Exportar PDF'}
+              </button>
+              <button className="secondary" type="button" onClick={() => removeFrames(selectedFrameIds)}>
+                Remover
+              </button>
             </div>
-          )}
+          </div>
         </section>
       )}
 

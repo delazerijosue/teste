@@ -1,16 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useStore } from '../state/store'
 import { computeLayout } from '../lib/layout'
 import { formatMeasurement } from '../lib/units'
 import { getFrameLabel, resolveFrameAssets } from '../lib/frame'
-import { exportFramePDF, exportFramePNG, exportFrameGuidesPDF } from '../lib/export'
 import './RightPanel.css'
 
 export function RightPanel({ frameId }: { frameId: string }) {
   const frame = useStore((s) => s.frames.find((f) => f.id === frameId))
-  const guidesMode = useStore((s) => s.guidesMode)
-  const [busy, setBusy] = useState<'pdf' | 'png' | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
   const resolved = frame ? resolveFrameAssets(frame) : null
   const variant = resolved?.variant ?? 'a'
@@ -23,21 +19,6 @@ export function RightPanel({ frameId }: { frameId: string }) {
   }, [frame, etiquetaAsset, taglineAsset])
 
   if (!frame || !layout || !etiquetaAsset || !taglineAsset) return null
-
-  const runExport = async (kind: 'pdf' | 'png') => {
-    setError(null)
-    setBusy(kind)
-    try {
-      if (guidesMode) await exportFrameGuidesPDF(frame)
-      else if (kind === 'pdf') await exportFramePDF(frame)
-      else await exportFramePNG(frame)
-    } catch (err) {
-      console.error(err)
-      setError('Falha ao exportar. Tente novamente.')
-    } finally {
-      setBusy(null)
-    }
-  }
 
   return (
     <div className="right-panel">
@@ -74,19 +55,6 @@ export function RightPanel({ frameId }: { frameId: string }) {
           </dd>
         </div>
       </dl>
-
-      <div className="export-actions">
-        <button onClick={() => runExport('pdf')} disabled={busy !== null}>
-          {busy === 'pdf' ? 'Exportando…' : guidesMode ? 'Exportar PDF (guias)' : 'Exportar PDF'}
-        </button>
-        {!guidesMode && (
-          <button onClick={() => runExport('png')} disabled={busy !== null}>
-            {busy === 'png' ? 'Exportando…' : 'Exportar PNG'}
-          </button>
-        )}
-      </div>
-
-      {error && <p className="export-error">{error}</p>}
     </div>
   )
 }

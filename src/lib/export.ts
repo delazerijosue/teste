@@ -10,7 +10,7 @@
 import { jsPDF } from 'jspdf'
 import 'svg2pdf.js'
 import { computeLayout } from './layout'
-import { getEtiquetaRenderRect, type EtiquetaLayer } from './assets'
+import { getEtiquetaRenderRect, type EtiquetaLayer, type ResolvedEtiqueta } from './assets'
 import { getGuideBoxes, type GuideBox } from './guides'
 import { coverScale } from './photo'
 import { pxToMm, pxToExportPixels } from './units'
@@ -72,9 +72,18 @@ function photoDisplayRect(frame: Frame, photoArea: Rect) {
 }
 
 function frameLayout(frame: Frame) {
-  const { etiquetaAsset: etiqueta, taglineAsset: tagline } = resolveFrameAssets(frame)
+  const { etiquetaAsset: etiqueta, taglineAsset: tagline, variant } = resolveFrameAssets(frame)
   const layout = computeLayout(frame.widthPx, frame.heightPx, frame.overrides, etiqueta.aspectRatio, tagline.aspectRatio)
-  return { layout, etiqueta, tagline }
+  return { layout, etiqueta, tagline, variant }
+}
+
+function intersectRect(a: Rect, b: Rect): Rect | null {
+  const x = Math.max(a.x, b.x)
+  const y = Math.max(a.y, b.y)
+  const right = Math.min(a.x + a.width, b.x + b.width)
+  const bottom = Math.min(a.y + a.height, b.y + b.height)
+  if (right <= x || bottom <= y) return null
+  return { x, y, width: right - x, height: bottom - y }
 }
 
 function filenameFor(frame: Frame, ext: string): string {
@@ -93,6 +102,57 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+// ---------- Canvas rendering (compartilhado entre PNG e os rasters do PDF) ----------
+
+/** Desenha a foto do frame (ou o placeholder cinza) em `ctx`, dentro de `destRect`, na origem local `(originX, originY)` — permite tanto renderizar o frame inteiro (origin 0,0) quanto recortar só um pedaço (ex.: o patch da etiqueta). */
+async function drawPhotoInto(
+  ctx: CanvasRenderingContext2D,
+  frame: Frame,
+  photoArea: Rect,
+  destRect: Rect,
+  originX: number,
+  originY: number,
+  scale: number,
+) {
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect((destRect.x - originX) * scale, (destRect.y - originY) * scale, destRect.width * scale, destRect.height * scale)
+  ctx.clip()
+  if (frame.photo) {
+    const img = await loadImage(frame.photo.src)
+    const rect = photoDisplayRect(frame, photoArea)!
+    ctx.drawImage(img, (rect.x - originX) * scale, (rect.y - originY) * scale, rect.width * scale, rect.height * scale)
+  } else {
+    ctx.fillStyle = PLACEHOLDER_GRAY
+    ctx.fillRect((destRect.x - originX) * scale, (destRect.y - originY) * scale, destRect.width * scale, destRect.height * scale)
+  }
+  ctx.restore()
+}
+
+/** Desenha a etiqueta (sombra em multiply + frente) em `ctx`, na origem local `(originX, originY)`. */
+async function drawEtiquetaInto(
+  ctx: CanvasRenderingContext2D,
+  etiqueta: ResolvedEtiqueta,
+  etiquetaRect: Rect,
+  originX: number,
+  originY: number,
+  scale: number,
+) {
+  const x = (etiquetaRect.x - originX) * scale
+  const y = (etiquetaRect.y - originY) * scale
+  const w = etiquetaRect.width * scale
+  const h = etiquetaRect.height * scale
+  if (etiqueta.shadow) {
+    const shadowImg = await loadImage(etiqueta.shadow.src)
+    ctx.save()
+    ctx.globalCompositeOperation = 'multiply'
+    ctx.drawImage(shadowImg, x, y, w, h)
+    ctx.restore()
+  }
+  const frontImg = await loadImage(etiqueta.front.src)
+  ctx.drawImage(frontImg, x, y, w, h)
+}
+
 // ---------- PNG (150 DPI) ----------
 
 export async function exportFramePNG(frame: Frame): Promise<void> {
@@ -107,41 +167,12 @@ export async function exportFramePNG(frame: Frame): Promise<void> {
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-  // Photo (or gray placeholder)
   const photoArea = layout.photoArea
-  ctx.save()
-  ctx.beginPath()
-  ctx.rect(photoArea.x * scale, photoArea.y * scale, photoArea.width * scale, photoArea.height * scale)
-  ctx.clip()
-  if (frame.photo) {
-    const img = await loadImage(frame.photo.src)
-    const rect = photoDisplayRect(frame, photoArea)!
-    ctx.drawImage(img, rect.x * scale, rect.y * scale, rect.width * scale, rect.height * scale)
-  } else {
-    ctx.fillStyle = PLACEHOLDER_GRAY
-    ctx.fillRect(photoArea.x * scale, photoArea.y * scale, photoArea.width * scale, photoArea.height * scale)
-  }
-  ctx.restore()
+  await drawPhotoInto(ctx, frame, photoArea, photoArea, 0, 0, scale)
 
-  // Etiqueta: sombra (multiply) atrás + frente, no retângulo expandido pelo inset
   const etiquetaRect = getEtiquetaRenderRect(etiqueta, layout.etiqueta)
-  if (etiqueta.shadow) {
-    const shadowImg = await loadImage(etiqueta.shadow.src)
-    ctx.save()
-    ctx.globalCompositeOperation = 'multiply'
-    ctx.drawImage(shadowImg, etiquetaRect.x * scale, etiquetaRect.y * scale, etiquetaRect.width * scale, etiquetaRect.height * scale)
-    ctx.restore()
-  }
-  const etiquetaImg = await loadImage(etiqueta.front.src)
-  ctx.drawImage(
-    etiquetaImg,
-    etiquetaRect.x * scale,
-    etiquetaRect.y * scale,
-    etiquetaRect.width * scale,
-    etiquetaRect.height * scale,
-  )
+  await drawEtiquetaInto(ctx, etiqueta, etiquetaRect, 0, 0, scale)
 
-  // Tagline (raster ou SVG)
   const taglineImg = await loadImage(tagline.src)
   ctx.drawImage(
     taglineImg,
@@ -184,7 +215,7 @@ function getSvgSource(layer: EtiquetaLayer) {
 }
 
 /** Adiciona uma camada (etiqueta ou tagline) ao SVG de exportação, como vetor real quando é SVG, ou <image> raster caso contrário. */
-async function appendLayer(svg: SVGSVGElement, layer: EtiquetaLayer, rect: Rect, blendMode?: 'multiply') {
+async function appendLayer(svg: SVGSVGElement, layer: EtiquetaLayer, rect: Rect) {
   if (layer.kind === 'svg') {
     const { inner, viewBox } = await getSvgSource(layer)
     const [, , vbWidth, vbHeight] = viewBox
@@ -192,7 +223,6 @@ async function appendLayer(svg: SVGSVGElement, layer: EtiquetaLayer, rect: Rect,
     const scaleX = rect.width / vbWidth
     const scaleY = rect.height / vbHeight
     group.setAttribute('transform', `translate(${rect.x}, ${rect.y}) scale(${scaleX}, ${scaleY})`)
-    if (blendMode) group.setAttribute('style', `mix-blend-mode:${blendMode}`)
     group.innerHTML = inner
     svg.appendChild(group)
   } else {
@@ -203,7 +233,6 @@ async function appendLayer(svg: SVGSVGElement, layer: EtiquetaLayer, rect: Rect,
     image.setAttribute('y', String(rect.y))
     image.setAttribute('width', String(rect.width))
     image.setAttribute('height', String(rect.height))
-    if (blendMode) image.setAttribute('style', `mix-blend-mode:${blendMode}`)
     svg.appendChild(image)
   }
 }
@@ -225,7 +254,7 @@ function createFrameSvg(frame: Frame): SVGSVGElement {
   return svg
 }
 
-async function savePdfFromSvg(frame: Frame, svg: SVGSVGElement): Promise<void> {
+async function savePdfFromSvg(frame: Frame, svg: SVGSVGElement, embedFont: boolean): Promise<void> {
   const widthMm = pxToMm(frame.widthPx)
   const heightMm = pxToMm(frame.heightPx)
   document.body.appendChild(svg)
@@ -235,7 +264,7 @@ async function savePdfFromSvg(frame: Frame, svg: SVGSVGElement): Promise<void> {
       format: [widthMm, heightMm],
       orientation: widthMm > heightMm ? 'landscape' : 'portrait',
     })
-    await registerCustomFonts(pdf)
+    if (embedFont) await registerCustomFonts(pdf)
     await pdf.svg(svg, { x: 0, y: 0, width: widthMm, height: heightMm })
     pdf.save(filenameFor(frame, 'pdf'))
   } finally {
@@ -243,39 +272,70 @@ async function savePdfFromSvg(frame: Frame, svg: SVGSVGElement): Promise<void> {
   }
 }
 
+function appendRasterImage(svg: SVGSVGElement, dataUrl: string, rect: Rect) {
+  const image = document.createElementNS(SVG_NS, 'image')
+  image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', dataUrl)
+  image.setAttribute('href', dataUrl)
+  image.setAttribute('x', String(rect.x))
+  image.setAttribute('y', String(rect.y))
+  image.setAttribute('width', String(rect.width))
+  image.setAttribute('height', String(rect.height))
+  svg.appendChild(image)
+}
+
+/**
+ * Recorta e reamostra a foto para a resolução de exportação (em vez de embutir
+ * o arquivo original, que pode ter várias vezes mais pixels/MB do que o
+ * necessário) — é o principal motivo do PDF ficar pesado.
+ */
+async function photoDataUrlForExport(frame: Frame, photoArea: Rect, scale: number): Promise<string> {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(photoArea.width * scale)
+  canvas.height = Math.round(photoArea.height * scale)
+  const ctx = canvas.getContext('2d')!
+  await drawPhotoInto(ctx, frame, photoArea, photoArea, photoArea.x, photoArea.y, scale)
+  return canvas.toDataURL('image/jpeg', 0.85)
+}
+
+/**
+ * Compõe sombra (multiply) + frente da etiqueta já contra o que está atrás
+ * dela (foto ou fundo branco) num único raster pequeno — o PDF não converte
+ * mix-blend-mode em CSS/SVG para um blend mode real, então a sombra some ou
+ * fica errada se exportada como camadas separadas.
+ */
+async function etiquetaDataUrlForExport(
+  frame: Frame,
+  photoArea: Rect,
+  etiqueta: ResolvedEtiqueta,
+  etiquetaRect: Rect,
+  scale: number,
+): Promise<string> {
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.round(etiquetaRect.width * scale)
+  canvas.height = Math.round(etiquetaRect.height * scale)
+  const ctx = canvas.getContext('2d')!
+
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+  const overlap = intersectRect(etiquetaRect, photoArea)
+  if (overlap) await drawPhotoInto(ctx, frame, photoArea, overlap, etiquetaRect.x, etiquetaRect.y, scale)
+
+  await drawEtiquetaInto(ctx, etiqueta, etiquetaRect, etiquetaRect.x, etiquetaRect.y, scale)
+
+  return canvas.toDataURL('image/png')
+}
+
 export async function exportFramePDF(frame: Frame): Promise<void> {
-  const { layout, etiqueta, tagline } = frameLayout(frame)
+  const { layout, etiqueta, tagline, variant } = frameLayout(frame)
   const svg = createFrameSvg(frame)
+  const scale = pxToExportPixels(1)
 
-  // Photo (clipped) or gray placeholder
+  // Photo (recortada e reamostrada) ou placeholder cinza
   const photoArea = layout.photoArea
-  const clipId = 'photo-clip'
-  const defs = document.createElementNS(SVG_NS, 'defs')
-  const clipPath = document.createElementNS(SVG_NS, 'clipPath')
-  clipPath.setAttribute('id', clipId)
-  const clipRect = document.createElementNS(SVG_NS, 'rect')
-  clipRect.setAttribute('x', String(photoArea.x))
-  clipRect.setAttribute('y', String(photoArea.y))
-  clipRect.setAttribute('width', String(photoArea.width))
-  clipRect.setAttribute('height', String(photoArea.height))
-  clipPath.appendChild(clipRect)
-  defs.appendChild(clipPath)
-  svg.appendChild(defs)
-
   if (frame.photo) {
-    const rect = photoDisplayRect(frame, photoArea)!
-    const g = document.createElementNS(SVG_NS, 'g')
-    g.setAttribute('clip-path', `url(#${clipId})`)
-    const image = document.createElementNS(SVG_NS, 'image')
-    image.setAttributeNS('http://www.w3.org/1999/xlink', 'href', frame.photo.src)
-    image.setAttribute('href', frame.photo.src)
-    image.setAttribute('x', String(rect.x))
-    image.setAttribute('y', String(rect.y))
-    image.setAttribute('width', String(rect.width))
-    image.setAttribute('height', String(rect.height))
-    image.setAttribute('preserveAspectRatio', 'none')
-    g.appendChild(image)
-    svg.appendChild(g)
+    const dataUrl = await photoDataUrlForExport(frame, photoArea, scale)
+    appendRasterImage(svg, dataUrl, photoArea)
   } else {
     const placeholder = document.createElementNS(SVG_NS, 'rect')
     placeholder.setAttribute('x', String(photoArea.x))
@@ -286,12 +346,23 @@ export async function exportFramePDF(frame: Frame): Promise<void> {
     svg.appendChild(placeholder)
   }
 
+  // Etiqueta: quando tem sombra (padrão do sistema), compõe sombra+frente num
+  // raster único já com o multiply correto; upload personalizado (sem sombra)
+  // continua entrando como vetor/raster puro, sem alteração.
   const etiquetaRect = getEtiquetaRenderRect(etiqueta, layout.etiqueta)
-  if (etiqueta.shadow) await appendLayer(svg, etiqueta.shadow, etiquetaRect, 'multiply')
-  await appendLayer(svg, etiqueta.front, etiquetaRect)
+  if (etiqueta.shadow) {
+    const dataUrl = await etiquetaDataUrlForExport(frame, photoArea, etiqueta, etiquetaRect, scale)
+    appendRasterImage(svg, dataUrl, etiquetaRect)
+  } else {
+    await appendLayer(svg, etiqueta.front, etiquetaRect)
+  }
+
   await appendLayer(svg, tagline, layout.tagline)
 
-  await savePdfFromSvg(frame, svg)
+  // A fonte customizada só é usada pela tagline de texto (variante A padrão) —
+  // não vale a pena embuti-la quando ela não entra no desenho.
+  const embedFont = !tagline.isCustom && variant === 'a'
+  await savePdfFromSvg(frame, svg, embedFont)
 }
 
 // ---------- PDF de guias (caixas vetoriais, sem os assets — para montar no Illustrator) ----------
@@ -334,5 +405,5 @@ export async function exportFrameGuidesPDF(frame: Frame): Promise<void> {
     appendGuideBox(svg, box, frame.widthPx)
   }
 
-  await savePdfFromSvg(frame, svg)
+  await savePdfFromSvg(frame, svg, false)
 }
