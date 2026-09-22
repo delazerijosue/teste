@@ -1,6 +1,6 @@
 import { useCallback, useRef, type ChangeEvent, type MouseEvent, type PointerEvent } from 'react'
 import { useStore } from '../state/store'
-import { clampOffset, coverScale, loadPhotoFile, type PhotoTransform } from '../lib/photo'
+import { loadPhotoFile, panPhoto } from '../lib/photo'
 import type { Rect } from '../lib/layout'
 import type { Frame } from '../types'
 import './PhotoLayer.css'
@@ -12,7 +12,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
   const canvasZoom = useStore((s) => s.canvasView.zoom)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const dragState = useRef<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null)
+  const dragState = useRef<{ lastX: number; lastY: number } | null>(null)
 
   const onFileChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -20,9 +20,9 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
       e.target.value = ''
       if (!file) return
       if (!/^image\/(png|jpe?g)$/.test(file.type)) return
-      loadPhotoFile(file, photoArea).then((photo) => setPhoto(frame.id, photo))
+      loadPhotoFile(file).then((photo) => setPhoto(frame.id, photo))
     },
-    [frame.id, photoArea, setPhoto],
+    [frame.id, setPhoto],
   )
 
   const onPointerDown = useCallback(
@@ -30,12 +30,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
       if (!frame.photo) return
       e.stopPropagation()
       snapshot()
-      dragState.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        offsetX: frame.photo.transform.offsetX,
-        offsetY: frame.photo.transform.offsetY,
-      }
+      dragState.current = { lastX: e.clientX, lastY: e.clientY }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
     [frame.photo, snapshot],
@@ -44,15 +39,11 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
   const onPointerMove = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
       if (!dragState.current || !frame.photo) return
-      const dx = (e.clientX - dragState.current.startX) / canvasZoom
-      const dy = (e.clientY - dragState.current.startY) / canvasZoom
-      const next: PhotoTransform = {
-        scale: frame.photo.transform.scale,
-        offsetX: dragState.current.offsetX + dx,
-        offsetY: dragState.current.offsetY + dy,
-      }
-      const clamped = clampOffset(photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, next)
-      updatePhotoTransform(frame.id, clamped)
+      const dx = (e.clientX - dragState.current.lastX) / canvasZoom
+      const dy = (e.clientY - dragState.current.lastY) / canvasZoom
+      dragState.current = { lastX: e.clientX, lastY: e.clientY }
+      const next = panPhoto(photoArea, frame.photo.transform, dx, dy)
+      updatePhotoTransform(frame.id, next)
     },
     [frame.id, frame.photo, photoArea, canvasZoom, updatePhotoTransform],
   )
@@ -66,10 +57,6 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
     e.stopPropagation()
     fileInputRef.current?.click()
   }, [])
-
-  const base = frame.photo ? coverScale(photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight) : 1
-  const dispWidth = frame.photo ? frame.photo.naturalWidth * base * frame.photo.transform.scale : 0
-  const dispHeight = frame.photo ? frame.photo.naturalHeight * base * frame.photo.transform.scale : 0
 
   return (
     <div
@@ -87,10 +74,7 @@ export function PhotoLayer({ frame, photoArea }: { frame: Frame; photoArea: Rect
           className="photo-layer__img"
           draggable={false}
           style={{
-            left: frame.photo.transform.offsetX,
-            top: frame.photo.transform.offsetY,
-            width: dispWidth,
-            height: dispHeight,
+            transform: `translate(${frame.photo.transform.panX}px, ${frame.photo.transform.panY}px) scale(${frame.photo.transform.scale})`,
           }}
         />
       ) : (

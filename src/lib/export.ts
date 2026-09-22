@@ -57,13 +57,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   })
 }
 
+/** Replicates the on-screen object-fit:cover + centered scale/pan for export, which has no native object-fit. */
 function photoDisplayRect(frame: Frame, photoArea: Rect) {
   if (!frame.photo) return null
   const base = coverScale(photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight)
-  const width = frame.photo.naturalWidth * base * frame.photo.transform.scale
-  const height = frame.photo.naturalHeight * base * frame.photo.transform.scale
-  const x = photoArea.x + frame.photo.transform.offsetX
-  const y = photoArea.y + frame.photo.transform.offsetY
+  const { scale, panX, panY } = frame.photo.transform
+  const width = frame.photo.naturalWidth * base * scale
+  const height = frame.photo.naturalHeight * base * scale
+  const x = photoArea.x + photoArea.width / 2 + panX - width / 2
+  const y = photoArea.y + photoArea.height / 2 + panY - height / 2
   return { x, y, width, height }
 }
 

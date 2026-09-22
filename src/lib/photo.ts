@@ -1,102 +1,62 @@
 /**
- * Photo fit/zoom/pan math (Seção 6). The photo always fully covers its
- * reserved area — zoom can never go low enough to reveal the gray
- * placeholder behind it, and panning is clamped for the same reason.
+ * Photo fit/zoom/pan (Seção 6).
+ *
+ * The photo is fit to its area the same way native CSS `object-fit: cover`
+ * works: scaled uniformly so the larger side matches the area exactly, then
+ * centered — the overflow on the other axis is cropped by the area's own
+ * `overflow: hidden`. This guarantees full coverage at any natural image
+ * size without any manual width/height math (see PhotoLayer.tsx).
+ *
+ * Zoom is a plain scale from the center (`transform-origin: center`), so it
+ * always grows evenly in every direction. Pan is a translate applied after
+ * that scale, in unscaled area-local pixels, clamped so the image can never
+ * reveal a gap on either axis.
  */
 import type { Rect } from './layout'
 
 export interface PhotoTransform {
-  /** Multiplier over the "cover" scale. 1 = exactly covers the area (minimum allowed). */
+  /** Zoom multiplier over the cover-fit size. 1 = exactly covers the area (minimum allowed). */
   scale: number
-  /** Image top-left corner, in photoArea-local px, at scale = 1x cover. */
-  offsetX: number
-  offsetY: number
+  /** Translation from center, in unscaled area-local px, applied after the scale. */
+  panX: number
+  panY: number
 }
 
-export function coverScale(area: Rect, naturalWidth: number, naturalHeight: number): number {
-  if (naturalWidth <= 0 || naturalHeight <= 0) return 1
-  return Math.max(area.width / naturalWidth, area.height / naturalHeight)
-}
+export const MAX_PHOTO_ZOOM = 3
 
 export function defaultPhotoTransform(): PhotoTransform {
-  return { scale: 1, offsetX: 0, offsetY: 0 }
-}
-
-/** Clamps offset so the scaled image never leaves a gap inside `area`. */
-export function clampOffset(
-  area: Rect,
-  naturalWidth: number,
-  naturalHeight: number,
-  transform: PhotoTransform,
-): PhotoTransform {
-  const base = coverScale(area, naturalWidth, naturalHeight)
-  const scale = Math.max(1, transform.scale)
-  const dispWidth = naturalWidth * base * scale
-  const dispHeight = naturalHeight * base * scale
-
-  const minX = Math.min(0, area.width - dispWidth)
-  const minY = Math.min(0, area.height - dispHeight)
-
-  return {
-    scale,
-    offsetX: clamp(transform.offsetX, minX, 0),
-    offsetY: clamp(transform.offsetY, minY, 0),
-  }
-}
-
-export function centeredTransform(
-  area: Rect,
-  naturalWidth: number,
-  naturalHeight: number,
-  scale = 1,
-): PhotoTransform {
-  const base = coverScale(area, naturalWidth, naturalHeight)
-  const dispWidth = naturalWidth * base * scale
-  const dispHeight = naturalHeight * base * scale
-  return {
-    scale,
-    offsetX: (area.width - dispWidth) / 2,
-    offsetY: (area.height - dispHeight) / 2,
-  }
+  return { scale: 1, panX: 0, panY: 0 }
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
 }
 
-/**
- * Changes zoom while keeping the point currently at the center of `area`
- * fixed, so the image grows/shrinks evenly in every direction instead of
- * anchoring to its top-left corner (which would visibly push the crop
- * toward the bottom-right as it zooms in).
- */
-export function zoomPhoto(
-  area: Rect,
-  naturalWidth: number,
-  naturalHeight: number,
-  transform: PhotoTransform,
-  newScale: number,
-): PhotoTransform {
-  const base = coverScale(area, naturalWidth, naturalHeight)
-  const oldDispWidth = naturalWidth * base * transform.scale
-  const oldDispHeight = naturalHeight * base * transform.scale
-
-  const centerX = area.width / 2
-  const centerY = area.height / 2
-  const fx = oldDispWidth > 0 ? (centerX - transform.offsetX) / oldDispWidth : 0.5
-  const fy = oldDispHeight > 0 ? (centerY - transform.offsetY) / oldDispHeight : 0.5
-
-  const newDispWidth = naturalWidth * base * newScale
-  const newDispHeight = naturalHeight * base * newScale
-
-  return clampOffset(area, naturalWidth, naturalHeight, {
-    scale: newScale,
-    offsetX: centerX - fx * newDispWidth,
-    offsetY: centerY - fy * newDispHeight,
-  })
+/** How far the scaled image can be panned on each axis before a gap would appear. */
+function maxPan(area: Rect, scale: number): { x: number; y: number } {
+  const s = Math.max(1, scale)
+  return { x: ((s - 1) * area.width) / 2, y: ((s - 1) * area.height) / 2 }
 }
 
-export const MAX_PHOTO_ZOOM = 3
+export function clampPan(area: Rect, transform: PhotoTransform): PhotoTransform {
+  const scale = Math.max(1, transform.scale)
+  const { x: maxX, y: maxY } = maxPan(area, scale)
+  return {
+    scale,
+    panX: clamp(transform.panX, -maxX, maxX),
+    panY: clamp(transform.panY, -maxY, maxY),
+  }
+}
+
+/** Drags the image by (dx, dy) area-local px, clamped to stay gap-free. */
+export function panPhoto(area: Rect, transform: PhotoTransform, dx: number, dy: number): PhotoTransform {
+  return clampPan(area, { ...transform, panX: transform.panX + dx, panY: transform.panY + dy })
+}
+
+/** Changes zoom in place — the center stays fixed because scaling is anchored there. */
+export function zoomPhoto(area: Rect, transform: PhotoTransform, newScale: number): PhotoTransform {
+  return clampPan(area, { ...transform, scale: newScale })
+}
 
 export interface LoadedPhoto {
   src: string
@@ -105,39 +65,7 @@ export interface LoadedPhoto {
   transform: PhotoTransform
 }
 
-/**
- * Re-derives a photo transform for a new photo area, preserving the same
- * relative pan position (0..1 fraction of the available slack on each
- * axis) and zoom level instead of re-clamping the raw pixel offsets —
- * so a resized (or duplicated-then-resized) frame keeps a similar crop
- * instead of snapping to a corner.
- */
-export function preservePhotoFraction(
-  oldArea: Rect,
-  newArea: Rect,
-  naturalWidth: number,
-  naturalHeight: number,
-  transform: PhotoTransform,
-): PhotoTransform {
-  const oldBase = coverScale(oldArea, naturalWidth, naturalHeight)
-  const oldSlackX = oldArea.width - naturalWidth * oldBase * transform.scale
-  const oldSlackY = oldArea.height - naturalHeight * oldBase * transform.scale
-  const fracX = oldSlackX !== 0 ? transform.offsetX / oldSlackX : 0.5
-  const fracY = oldSlackY !== 0 ? transform.offsetY / oldSlackY : 0.5
-
-  const newBase = coverScale(newArea, naturalWidth, naturalHeight)
-  const newSlackX = newArea.width - naturalWidth * newBase * transform.scale
-  const newSlackY = newArea.height - naturalHeight * newBase * transform.scale
-
-  return clampOffset(newArea, naturalWidth, naturalHeight, {
-    scale: transform.scale,
-    offsetX: newSlackX * fracX,
-    offsetY: newSlackY * fracY,
-  })
-}
-
-/** Loads an image file and centers it (cover-fit) within `area`. */
-export function loadPhotoFile(file: File, area: Rect): Promise<LoadedPhoto> {
+export function loadPhotoFile(file: File): Promise<LoadedPhoto> {
   return new Promise((resolve, reject) => {
     const src = URL.createObjectURL(file)
     const img = new Image()
@@ -146,10 +74,37 @@ export function loadPhotoFile(file: File, area: Rect): Promise<LoadedPhoto> {
         src,
         naturalWidth: img.naturalWidth,
         naturalHeight: img.naturalHeight,
-        transform: centeredTransform(area, img.naturalWidth, img.naturalHeight, 1),
+        transform: defaultPhotoTransform(),
       })
     }
     img.onerror = reject
     img.src = src
   })
+}
+
+/**
+ * Re-derives a pan for a new photo area, preserving the same relative
+ * position (fraction of the allowed pan range on each axis) instead of the
+ * raw pixel offset — so a resized (or duplicated-then-resized) frame keeps
+ * a similar crop instead of snapping back to center.
+ */
+export function preservePhotoFraction(oldArea: Rect, newArea: Rect, transform: PhotoTransform): PhotoTransform {
+  const oldMax = maxPan(oldArea, transform.scale)
+  const fracX = oldMax.x !== 0 ? transform.panX / oldMax.x : 0
+  const fracY = oldMax.y !== 0 ? transform.panY / oldMax.y : 0
+  const newMax = maxPan(newArea, transform.scale)
+  return clampPan(newArea, {
+    scale: transform.scale,
+    panX: fracX * newMax.x,
+    panY: fracY * newMax.y,
+  })
+}
+
+/**
+ * Cover-fit scale (matches CSS `object-fit: cover`) — used only to replicate
+ * the on-screen fit for canvas/SVG export, which has no native object-fit.
+ */
+export function coverScale(area: Rect, naturalWidth: number, naturalHeight: number): number {
+  if (naturalWidth <= 0 || naturalHeight <= 0) return 1
+  return Math.max(area.width / naturalWidth, area.height / naturalHeight)
 }

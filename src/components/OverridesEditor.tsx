@@ -3,7 +3,7 @@ import { useStore } from '../state/store'
 import { computeLayout, resolveTaglineVariant, type TaglineVariant } from '../lib/layout'
 import { resolveEtiquetaAsset, resolveTaglineAsset } from '../lib/assets'
 import { loadCustomAsset, isAcceptedAssetFile } from '../lib/customAssets'
-import { clampOffset, loadPhotoFile, zoomPhoto, MAX_PHOTO_ZOOM } from '../lib/photo'
+import { clampPan, loadPhotoFile, zoomPhoto, MAX_PHOTO_ZOOM } from '../lib/photo'
 import { fromPx, toPx } from '../lib/units'
 import type { Frame } from '../types'
 import './OverridesEditor.css'
@@ -73,19 +73,19 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
     e.target.value = ''
     if (!file || !/^image\/(png|jpe?g)$/.test(file.type)) return
     snapshot()
-    const photo = await loadPhotoFile(file, layout.photoArea)
+    const photo = await loadPhotoFile(file)
     setPhoto(frame.id, photo)
   }
 
   const onPhotoZoom = (value: number) => {
-    if (!frame.photo) return
-    const zoomed = zoomPhoto(layout.photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, frame.photo.transform, value)
+    if (!frame.photo || Number.isNaN(value)) return
+    const zoomed = zoomPhoto(layout.photoArea, frame.photo.transform, value)
     updatePhotoTransform(frame.id, zoomed)
   }
 
-  const onPhotoOffset = (axis: 'offsetX' | 'offsetY', displayValue: number) => {
-    if (!frame.photo) return
-    const clamped = clampOffset(layout.photoArea, frame.photo.naturalWidth, frame.photo.naturalHeight, {
+  const onPhotoPan = (axis: 'panX' | 'panY', displayValue: number) => {
+    if (!frame.photo || Number.isNaN(displayValue)) return
+    const clamped = clampPan(layout.photoArea, {
       ...frame.photo.transform,
       [axis]: toPx(displayValue, unit),
     })
@@ -130,9 +130,9 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
                 <input
                   type="number"
                   step={step}
-                  value={disp(frame.photo.transform.offsetX)}
+                  value={disp(frame.photo.transform.panX)}
                   onFocus={() => snapshot()}
-                  onChange={(e) => onPhotoOffset('offsetX', Number(e.target.value))}
+                  onChange={(e) => onPhotoPan('panX', Number(e.target.value))}
                 />
               </div>
               <div>
@@ -140,9 +140,9 @@ export function OverridesEditor({ frame }: { frame: Frame }) {
                 <input
                   type="number"
                   step={step}
-                  value={disp(frame.photo.transform.offsetY)}
+                  value={disp(frame.photo.transform.panY)}
                   onFocus={() => snapshot()}
-                  onChange={(e) => onPhotoOffset('offsetY', Number(e.target.value))}
+                  onChange={(e) => onPhotoPan('panY', Number(e.target.value))}
                 />
               </div>
             </div>
