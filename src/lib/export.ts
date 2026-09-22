@@ -11,6 +11,7 @@ import { jsPDF } from 'jspdf'
 import 'svg2pdf.js'
 import { computeLayout } from './layout'
 import { getEtiquetaRenderRect, type EtiquetaLayer } from './assets'
+import { getGuideBoxes, type GuideBox } from './guides'
 import { coverScale } from './photo'
 import { pxToMm, pxToExportPixels } from './units'
 import { assetUrl } from './url'
@@ -207,11 +208,7 @@ async function appendLayer(svg: SVGSVGElement, layer: EtiquetaLayer, rect: Rect,
   }
 }
 
-export async function exportFramePDF(frame: Frame): Promise<void> {
-  const { layout, etiqueta, tagline } = frameLayout(frame)
-  const widthMm = pxToMm(frame.widthPx)
-  const heightMm = pxToMm(frame.heightPx)
-
+function createFrameSvg(frame: Frame): SVGSVGElement {
   const svg = document.createElementNS(SVG_NS, 'svg') as SVGSVGElement
   svg.setAttribute('xmlns', SVG_NS)
   svg.setAttribute('width', String(frame.widthPx))
@@ -225,6 +222,30 @@ export async function exportFramePDF(frame: Frame): Promise<void> {
   bg.setAttribute('height', String(frame.heightPx))
   bg.setAttribute('fill', '#ffffff')
   svg.appendChild(bg)
+  return svg
+}
+
+async function savePdfFromSvg(frame: Frame, svg: SVGSVGElement): Promise<void> {
+  const widthMm = pxToMm(frame.widthPx)
+  const heightMm = pxToMm(frame.heightPx)
+  document.body.appendChild(svg)
+  try {
+    const pdf = new jsPDF({
+      unit: 'mm',
+      format: [widthMm, heightMm],
+      orientation: widthMm > heightMm ? 'landscape' : 'portrait',
+    })
+    await registerCustomFonts(pdf)
+    await pdf.svg(svg, { x: 0, y: 0, width: widthMm, height: heightMm })
+    pdf.save(filenameFor(frame, 'pdf'))
+  } finally {
+    svg.remove()
+  }
+}
+
+export async function exportFramePDF(frame: Frame): Promise<void> {
+  const { layout, etiqueta, tagline } = frameLayout(frame)
+  const svg = createFrameSvg(frame)
 
   // Photo (clipped) or gray placeholder
   const photoArea = layout.photoArea
@@ -270,17 +291,48 @@ export async function exportFramePDF(frame: Frame): Promise<void> {
   await appendLayer(svg, etiqueta.front, etiquetaRect)
   await appendLayer(svg, tagline, layout.tagline)
 
-  document.body.appendChild(svg)
-  try {
-    const pdf = new jsPDF({
-      unit: 'mm',
-      format: [widthMm, heightMm],
-      orientation: widthMm > heightMm ? 'landscape' : 'portrait',
-    })
-    await registerCustomFonts(pdf)
-    await pdf.svg(svg, { x: 0, y: 0, width: widthMm, height: heightMm })
-    pdf.save(filenameFor(frame, 'pdf'))
-  } finally {
-    svg.remove()
+  await savePdfFromSvg(frame, svg)
+}
+
+// ---------- PDF de guias (caixas vetoriais, sem os assets — para montar no Illustrator) ----------
+
+function appendGuideBox(svg: SVGSVGElement, box: GuideBox, frameWidthPx: number) {
+  const isFrame = box.key === 'frame'
+  const stroke = isFrame ? '#7a8a92' : '#0067b3'
+  // Escala pelo tamanho do FRAME (não da própria caixa), para os rótulos ficarem
+  // legíveis e consistentes entre si independente do tamanho de cada zona.
+  const baseFontSize = isFrame ? frameWidthPx * 0.01 : frameWidthPx * 0.016
+  const fontSize = Math.max(isFrame ? 8 : 10, Math.min(baseFontSize, box.rect.height * 0.4))
+
+  const rect = document.createElementNS(SVG_NS, 'rect')
+  rect.setAttribute('x', String(box.rect.x))
+  rect.setAttribute('y', String(box.rect.y))
+  rect.setAttribute('width', String(box.rect.width))
+  rect.setAttribute('height', String(box.rect.height))
+  rect.setAttribute('fill', 'none')
+  rect.setAttribute('stroke', stroke)
+  rect.setAttribute('stroke-width', '1.5')
+  svg.appendChild(rect)
+
+  const text = document.createElementNS(SVG_NS, 'text')
+  text.setAttribute('x', String(box.rect.x + 8))
+  text.setAttribute('y', String(box.rect.y + fontSize + 6))
+  text.setAttribute('font-family', 'Helvetica, Arial, sans-serif')
+  text.setAttribute('font-size', String(fontSize))
+  text.setAttribute('font-weight', 'bold')
+  text.setAttribute('fill', stroke)
+  text.textContent = box.label
+  svg.appendChild(text)
+}
+
+/** Exporta apenas as caixas vetoriais (margem, foto, etiqueta, tagline) — sem os assets reais — prontas para montar manualmente no Illustrator. */
+export async function exportFrameGuidesPDF(frame: Frame): Promise<void> {
+  const { layout } = frameLayout(frame)
+  const svg = createFrameSvg(frame)
+
+  for (const box of getGuideBoxes(frame.widthPx, frame.heightPx, layout)) {
+    appendGuideBox(svg, box, frame.widthPx)
   }
+
+  await savePdfFromSvg(frame, svg)
 }

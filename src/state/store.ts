@@ -42,6 +42,8 @@ interface AppState {
   selectedFrameIds: string[]
   /** In-app clipboard (Ctrl/Cmd+C e Ctrl/Cmd+V) — não é o clipboard do sistema. */
   clipboard: Frame[]
+  /** Modo "Guias": mostra/exporta caixas vetoriais no lugar dos assets reais, para montar o layout no Illustrator. */
+  guidesMode: boolean
   debugMode: boolean
   leftPanelCollapsed: boolean
   canvasView: CanvasView
@@ -70,6 +72,7 @@ interface AppState {
   setCustomEtiqueta: (id: string, asset: CustomAsset | null) => void
   setCustomTagline: (id: string, asset: CustomAsset | null) => void
   toggleDebug: () => void
+  setGuidesMode: (value: boolean) => void
   toggleLeftPanel: () => void
   setCanvasView: (view: Partial<CanvasView>) => void
 }
@@ -86,6 +89,7 @@ export const useStore = create<AppState>((set, get) => ({
   frames: [],
   selectedFrameIds: [],
   clipboard: [],
+  guidesMode: false,
   debugMode: false,
   leftPanelCollapsed: false,
   canvasView: { x: 0, y: 0, zoom: 1 },
@@ -281,6 +285,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   toggleDebug: () => set((s) => ({ debugMode: !s.debugMode })),
+  setGuidesMode: (value) => set({ guidesMode: value }),
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
   setCanvasView: (view) => set((s) => ({ canvasView: { ...s.canvasView, ...view } })),
 }))

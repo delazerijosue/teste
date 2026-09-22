@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, type PointerEvent } from 'react'
 import { useStore } from '../state/store'
 import { computeLayout } from '../lib/layout'
 import { getEtiquetaRenderRect, type ResolvedEtiqueta } from '../lib/assets'
+import { getGuideBoxes } from '../lib/guides'
 import { fromPx } from '../lib/units'
 import { getFrameLabel, resolveFrameAssets } from '../lib/frame'
 import { PhotoLayer } from './PhotoLayer'
@@ -15,6 +16,7 @@ function hasSelectModifier(e: { shiftKey: boolean; metaKey: boolean; ctrlKey: bo
 export function FrameView({ frame }: { frame: Frame }) {
   const selectedFrameIds = useStore((s) => s.selectedFrameIds)
   const debugMode = useStore((s) => s.debugMode)
+  const guidesMode = useStore((s) => s.guidesMode)
   const selectFrame = useStore((s) => s.selectFrame)
   const toggleFrameSelection = useStore((s) => s.toggleFrameSelection)
   const moveFrame = useStore((s) => s.moveFrame)
@@ -77,22 +79,28 @@ export function FrameView({ frame }: { frame: Frame }) {
       onPointerUp={onPointerUp}
       onPointerLeave={onPointerUp}
     >
-      <PhotoLayer frame={frame} photoArea={layout.photoArea} onSelect={onPhotoSelect} />
+      {guidesMode ? (
+        <GuidesLayer frame={frame} layout={layout} />
+      ) : (
+        <>
+          <PhotoLayer frame={frame} photoArea={layout.photoArea} onSelect={onPhotoSelect} />
 
-      <EtiquetaLayers asset={etiquetaAsset} contentBox={layout.etiqueta} />
+          <EtiquetaLayers asset={etiquetaAsset} contentBox={layout.etiqueta} />
 
-      <img
-        src={taglineAsset.src}
-        alt="Tagline"
-        className="frame__tagline"
-        draggable={false}
-        style={{
-          left: layout.tagline.x,
-          top: layout.tagline.y,
-          width: layout.tagline.width,
-          height: layout.tagline.height,
-        }}
-      />
+          <img
+            src={taglineAsset.src}
+            alt="Tagline"
+            className="frame__tagline"
+            draggable={false}
+            style={{
+              left: layout.tagline.x,
+              top: layout.tagline.y,
+              width: layout.tagline.width,
+              height: layout.tagline.height,
+            }}
+          />
+        </>
+      )}
 
       {debugMode && isSelected && <DebugOverlay frame={frame} layout={layout} />}
 
@@ -117,6 +125,23 @@ function EtiquetaLayers({
       )}
       <img src={asset.front.src} alt="Etiqueta" className="frame__etiqueta" draggable={false} style={style} />
     </>
+  )
+}
+
+function GuidesLayer({ frame, layout }: { frame: Frame; layout: ReturnType<typeof computeLayout> }) {
+  const boxes = getGuideBoxes(frame.widthPx, frame.heightPx, layout)
+  return (
+    <div className="guides-layer">
+      {boxes.map((box) => (
+        <div
+          key={box.key}
+          className={`guide-rect guide-rect--${box.key}`}
+          style={{ left: box.rect.x, top: box.rect.y, width: box.rect.width, height: box.rect.height }}
+        >
+          <span className="guide-rect__label">{box.label}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 

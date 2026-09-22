@@ -2,7 +2,7 @@ import { useState, type FormEvent, type MouseEvent } from 'react'
 import { useStore } from '../state/store'
 import type { Unit } from '../lib/units'
 import { getFrameLabel } from '../lib/frame'
-import { exportFramePDF, exportFramePNG } from '../lib/export'
+import { exportFramePDF, exportFramePNG, exportFrameGuidesPDF } from '../lib/export'
 import { OverridesEditor } from './OverridesEditor'
 import './LeftPanel.css'
 
@@ -11,6 +11,8 @@ export function LeftPanel() {
   const toggleLeftPanel = useStore((s) => s.toggleLeftPanel)
   const debugMode = useStore((s) => s.debugMode)
   const toggleDebug = useStore((s) => s.toggleDebug)
+  const guidesMode = useStore((s) => s.guidesMode)
+  const setGuidesMode = useStore((s) => s.setGuidesMode)
   const createFrame = useStore((s) => s.createFrame)
   const frames = useStore((s) => s.frames)
   const selectedFrameIds = useStore((s) => s.selectedFrameIds)
@@ -49,7 +51,8 @@ export function LeftPanel() {
     try {
       const selected = frames.filter((f) => selectedFrameIds.includes(f.id))
       for (const f of selected) {
-        if (kind === 'pdf') await exportFramePDF(f)
+        if (guidesMode) await exportFrameGuidesPDF(f)
+        else if (kind === 'pdf') await exportFramePDF(f)
         else await exportFramePNG(f)
       }
     } finally {
@@ -120,6 +123,31 @@ export function LeftPanel() {
       </section>
 
       <section className="left-panel__section">
+        <label>Modo</label>
+        <div className="mode-toggle">
+          <button
+            type="button"
+            className={guidesMode ? 'secondary' : ''}
+            onClick={() => setGuidesMode(false)}
+          >
+            Design
+          </button>
+          <button
+            type="button"
+            className={guidesMode ? '' : 'secondary'}
+            onClick={() => setGuidesMode(true)}
+          >
+            Guias
+          </button>
+        </div>
+        {guidesMode && (
+          <p className="hint">
+            Mostra caixas no lugar dos assets e exporta só o vetor (PDF) para montar no Illustrator.
+          </p>
+        )}
+      </section>
+
+      <section className="left-panel__section">
         <label className="checkbox-row">
           <input type="checkbox" checked={debugMode} onChange={toggleDebug} />
           Modo debug
@@ -169,21 +197,23 @@ export function LeftPanel() {
             <div className="selection-toolbar">
               <span className="selection-toolbar__count">{selectedFrameIds.length} selecionados</span>
               <div className="selection-toolbar__actions">
-                <button
-                  className="secondary"
-                  type="button"
-                  disabled={bulkBusy !== null}
-                  onClick={() => runBulkExport('png')}
-                >
-                  {bulkBusy === 'png' ? 'Exportando…' : 'Exportar PNG'}
-                </button>
+                {!guidesMode && (
+                  <button
+                    className="secondary"
+                    type="button"
+                    disabled={bulkBusy !== null}
+                    onClick={() => runBulkExport('png')}
+                  >
+                    {bulkBusy === 'png' ? 'Exportando…' : 'Exportar PNG'}
+                  </button>
+                )}
                 <button
                   className="secondary"
                   type="button"
                   disabled={bulkBusy !== null}
                   onClick={() => runBulkExport('pdf')}
                 >
-                  {bulkBusy === 'pdf' ? 'Exportando…' : 'Exportar PDF'}
+                  {bulkBusy === 'pdf' ? 'Exportando…' : guidesMode ? 'Exportar PDF (guias)' : 'Exportar PDF'}
                 </button>
                 <button className="secondary" type="button" onClick={() => removeFrames(selectedFrameIds)}>
                   Remover

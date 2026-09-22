@@ -3,11 +3,12 @@ import { useStore } from '../state/store'
 import { computeLayout } from '../lib/layout'
 import { formatMeasurement } from '../lib/units'
 import { getFrameLabel, resolveFrameAssets } from '../lib/frame'
-import { exportFramePDF, exportFramePNG } from '../lib/export'
+import { exportFramePDF, exportFramePNG, exportFrameGuidesPDF } from '../lib/export'
 import './RightPanel.css'
 
 export function RightPanel({ frameId }: { frameId: string }) {
   const frame = useStore((s) => s.frames.find((f) => f.id === frameId))
+  const guidesMode = useStore((s) => s.guidesMode)
   const [busy, setBusy] = useState<'pdf' | 'png' | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,7 +28,8 @@ export function RightPanel({ frameId }: { frameId: string }) {
     setError(null)
     setBusy(kind)
     try {
-      if (kind === 'pdf') await exportFramePDF(frame)
+      if (guidesMode) await exportFrameGuidesPDF(frame)
+      else if (kind === 'pdf') await exportFramePDF(frame)
       else await exportFramePNG(frame)
     } catch (err) {
       console.error(err)
@@ -75,11 +77,13 @@ export function RightPanel({ frameId }: { frameId: string }) {
 
       <div className="export-actions">
         <button onClick={() => runExport('pdf')} disabled={busy !== null}>
-          {busy === 'pdf' ? 'Exportando…' : 'Exportar PDF'}
+          {busy === 'pdf' ? 'Exportando…' : guidesMode ? 'Exportar PDF (guias)' : 'Exportar PDF'}
         </button>
-        <button onClick={() => runExport('png')} disabled={busy !== null}>
-          {busy === 'png' ? 'Exportando…' : 'Exportar PNG'}
-        </button>
+        {!guidesMode && (
+          <button onClick={() => runExport('png')} disabled={busy !== null}>
+            {busy === 'png' ? 'Exportando…' : 'Exportar PNG'}
+          </button>
+        )}
       </div>
 
       {error && <p className="export-error">{error}</p>}
