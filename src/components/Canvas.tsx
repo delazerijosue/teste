@@ -18,6 +18,10 @@ interface ScreenRect {
   height: number
 }
 
+type DragState =
+  | { kind: 'pan'; startClientX: number; startClientY: number; viewX: number; viewY: number }
+  | { kind: 'marquee'; startClientX: number; startClientY: number; additive: boolean }
+
 export function Canvas() {
   const frames = useStore((s) => s.frames)
   const view = useStore((s) => s.canvasView)
@@ -25,10 +29,12 @@ export function Canvas() {
   const selectFrame = useStore((s) => s.selectFrame)
   const selectFrames = useStore((s) => s.selectFrames)
   const selectedFrameIds = useStore((s) => s.selectedFrameIds)
+  const spacePressed = useStore((s) => s.spacePressed)
 
   const viewportRef = useRef<HTMLDivElement>(null)
-  const marqueeState = useRef<{ startClientX: number; startClientY: number; additive: boolean } | null>(null)
+  const dragRef = useRef<DragState | null>(null)
   const [marqueeRect, setMarqueeRect] = useState<ScreenRect | null>(null)
+  const [isPanning, setIsPanning] = useState(false)
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
@@ -51,36 +57,56 @@ export function Canvas() {
 
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
+      if (spacePressed) {
+        dragRef.current = { kind: 'pan', startClientX: e.clientX, startClientY: e.clientY, viewX: view.x, viewY: view.y }
+        setIsPanning(true)
+        ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+        return
+      }
       if (e.target !== e.currentTarget) return
       const additive = e.shiftKey || e.metaKey || e.ctrlKey
-      marqueeState.current = { startClientX: e.clientX, startClientY: e.clientY, additive }
+      dragRef.current = { kind: 'marquee', startClientX: e.clientX, startClientY: e.clientY, additive }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [],
+    [spacePressed, view],
   )
 
-  const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    if (!marqueeState.current) return
-    const rect = viewportRef.current!.getBoundingClientRect()
-    const { startClientX, startClientY } = marqueeState.current
-    const x0 = startClientX - rect.left
-    const y0 = startClientY - rect.top
-    const x1 = e.clientX - rect.left
-    const y1 = e.clientY - rect.top
-    setMarqueeRect({
-      x: Math.min(x0, x1),
-      y: Math.min(y0, y1),
-      width: Math.abs(x1 - x0),
-      height: Math.abs(y1 - y0),
-    })
-  }, [])
+  const onPointerMove = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const drag = dragRef.current
+      if (!drag) return
+
+      if (drag.kind === 'pan') {
+        setCanvasView({
+          x: drag.viewX + (e.clientX - drag.startClientX),
+          y: drag.viewY + (e.clientY - drag.startClientY),
+        })
+        return
+      }
+
+      const rect = viewportRef.current!.getBoundingClientRect()
+      const x0 = drag.startClientX - rect.left
+      const y0 = drag.startClientY - rect.top
+      const x1 = e.clientX - rect.left
+      const y1 = e.clientY - rect.top
+      setMarqueeRect({
+        x: Math.min(x0, x1),
+        y: Math.min(y0, y1),
+        width: Math.abs(x1 - x0),
+        height: Math.abs(y1 - y0),
+      })
+    },
+    [setCanvasView],
+  )
 
   const onPointerUp = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
-      const drag = marqueeState.current
-      marqueeState.current = null
+      const drag = dragRef.current
+      dragRef.current = null
       setMarqueeRect(null)
+      setIsPanning(false)
       if (!drag) return
+      if (drag.kind === 'pan') return
 
       const dx = Math.abs(e.clientX - drag.startClientX)
       const dy = Math.abs(e.clientY - drag.startClientY)
@@ -123,9 +149,17 @@ export function Canvas() {
 
   const dotSize = Math.max(6, 25 * view.zoom)
 
+  const viewportClass = [
+    'canvas-viewport',
+    spacePressed && 'canvas-viewport--hand',
+    isPanning && 'canvas-viewport--panning',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
     <div
-      className="canvas-viewport"
+      className={viewportClass}
       ref={viewportRef}
       onWheel={onWheel}
       onPointerDown={onPointerDown}

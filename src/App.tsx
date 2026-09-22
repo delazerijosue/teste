@@ -17,10 +17,18 @@ export default function App() {
   const removeFrames = useStore((s) => s.removeFrames)
   const copySelection = useStore((s) => s.copySelection)
   const pasteClipboard = useStore((s) => s.pasteClipboard)
+  const setSpacePressed = useStore((s) => s.setSpacePressed)
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isEditableTarget(e.target)) return
+
+      if (e.code === 'Space') {
+        if (!e.repeat) setSpacePressed(true)
+        e.preventDefault()
+        return
+      }
+
       const mod = e.metaKey || e.ctrlKey
 
       if (mod && e.key.toLowerCase() === 'z') {
@@ -46,9 +54,20 @@ export default function App() {
         removeFrames(selectedFrameIds)
       }
     }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') setSpacePressed(false)
+    }
+    const onBlur = () => setSpacePressed(false)
+
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [selectedFrameIds, undo, redo, copySelection, pasteClipboard, removeFrames])
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [selectedFrameIds, undo, redo, copySelection, pasteClipboard, removeFrames, setSpacePressed])
 
   return (
     <div className="app-shell">

@@ -18,6 +18,7 @@ export function PhotoLayer({
   const updatePhotoTransform = useStore((s) => s.updatePhotoTransform)
   const snapshot = useStore((s) => s.snapshot)
   const canvasZoom = useStore((s) => s.canvasView.zoom)
+  const spacePressed = useStore((s) => s.spacePressed)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dragState = useRef<{ lastX: number; lastY: number } | null>(null)
@@ -35,6 +36,7 @@ export function PhotoLayer({
 
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
+      if (spacePressed) return
       if (!frame.photo) return
       e.stopPropagation()
       const modifier = e.shiftKey || e.metaKey || e.ctrlKey
@@ -44,7 +46,7 @@ export function PhotoLayer({
       dragState.current = { lastX: e.clientX, lastY: e.clientY }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [frame.photo, onSelect, snapshot],
+    [spacePressed, frame.photo, onSelect, snapshot],
   )
 
   const onPointerMove = useCallback(

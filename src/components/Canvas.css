@@ -9,6 +9,14 @@
   touch-action: none;
 }
 
+.canvas-viewport--hand {
+  cursor: grab;
+}
+
+.canvas-viewport--hand.canvas-viewport--panning {
+  cursor: grabbing;
+}
+
 .canvas-marquee {
   position: absolute;
   border: 1px solid var(--color-accent);

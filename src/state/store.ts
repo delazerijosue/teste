@@ -45,6 +45,8 @@ interface AppState {
   /** Modo "Guias": mostra/exporta caixas vetoriais no lugar dos assets reais, para montar o layout no Illustrator. */
   guidesMode: boolean
   debugMode: boolean
+  /** Tecla espaço pressionada — ativa a ferramenta de mão (pan por arrasto) no canvas. */
+  spacePressed: boolean
   leftPanelCollapsed: boolean
   canvasView: CanvasView
   past: HistoryEntry[]
@@ -75,6 +77,7 @@ interface AppState {
   setCustomTagline: (id: string, asset: CustomAsset | null) => void
   toggleDebug: () => void
   setGuidesMode: (value: boolean) => void
+  setSpacePressed: (value: boolean) => void
   toggleLeftPanel: () => void
   setCanvasView: (view: Partial<CanvasView>) => void
 }
@@ -93,6 +96,7 @@ export const useStore = create<AppState>((set, get) => ({
   clipboard: [],
   guidesMode: false,
   debugMode: false,
+  spacePressed: false,
   leftPanelCollapsed: false,
   canvasView: { x: 0, y: 0, zoom: 1 },
   past: [],
@@ -299,6 +303,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   toggleDebug: () => set((s) => ({ debugMode: !s.debugMode })),
   setGuidesMode: (value) => set({ guidesMode: value }),
+  setSpacePressed: (value) => set({ spacePressed: value }),
   toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
   setCanvasView: (view) => set((s) => ({ canvasView: { ...s.canvasView, ...view } })),
 }))

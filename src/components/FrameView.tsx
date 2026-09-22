@@ -17,6 +17,7 @@ export function FrameView({ frame }: { frame: Frame }) {
   const selectedFrameIds = useStore((s) => s.selectedFrameIds)
   const debugMode = useStore((s) => s.debugMode)
   const guidesMode = useStore((s) => s.guidesMode)
+  const spacePressed = useStore((s) => s.spacePressed)
   const selectFrame = useStore((s) => s.selectFrame)
   const toggleFrameSelection = useStore((s) => s.toggleFrameSelection)
   const moveFrame = useStore((s) => s.moveFrame)
@@ -43,6 +44,7 @@ export function FrameView({ frame }: { frame: Frame }) {
 
   const onPointerDown = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
+      if (spacePressed) return
       if (e.target !== e.currentTarget) return
       if (hasSelectModifier(e)) {
         toggleFrameSelection(frame.id)
@@ -53,7 +55,7 @@ export function FrameView({ frame }: { frame: Frame }) {
       dragState.current = { startX: e.clientX, startY: e.clientY, frameX: frame.canvasX, frameY: frame.canvasY }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
-    [frame.id, frame.canvasX, frame.canvasY, selectFrame, toggleFrameSelection, snapshot],
+    [frame.id, frame.canvasX, frame.canvasY, selectFrame, toggleFrameSelection, snapshot, spacePressed],
   )
 
   const onPointerMove = useCallback(

@@ -2,7 +2,7 @@
   position: absolute;
   background: #ffffff;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.35);
-  cursor: default;
+  cursor: inherit;
   user-select: none;
 }
 
